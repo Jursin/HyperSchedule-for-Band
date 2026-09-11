@@ -49,6 +49,9 @@
 const preferences = require("../../common/preferences.js")
 const utils = require("../../common/utils.js")
 
+// 仅在上课前 30 分钟内显示倒计时
+const UPCOMING_REMINDER_MINUTES = 30
+
 export default {
   protected: {
     course: {
@@ -75,7 +78,6 @@ export default {
       position: ""
     },
     sortedTodayCourses: [],
-    reminderWindow: null,
     timer: null
   },
 
@@ -114,7 +116,7 @@ export default {
     }, 1000)
   },
 
-  // 预处理当天课程排序与提醒生效区间
+  // 预处理当天课程排序
   initTodayCourseIndex() {
     const courses = Array.isArray(this.todayCourses) ? this.todayCourses : []
     // 预解析时间，缓存到课程对象，避免后续重复解析
@@ -129,26 +131,6 @@ export default {
       const t2 = b._parsedRange ? b._parsedRange.start : 0
       return t1 - t2
     })
-    let lastEnd = 0
-    for (let i = 0; i < this.sortedTodayCourses.length; i += 1) {
-      const range = this.sortedTodayCourses[i]._parsedRange
-      if (range && range.end > lastEnd) {
-        lastEnd = range.end
-      }
-    }
-    this.reminderWindow =
-      this.sortedTodayCourses.length > 0 ? {from: 7 * 60, to: lastEnd} : null
-  },
-
-  inReminderWindow() {
-    if (!this.reminderWindow) {
-      return false
-    }
-    const now = new Date()
-    const currentMinutes = now.getHours() * 60 + now.getMinutes()
-    return (
-      currentMinutes >= this.reminderWindow.from && currentMinutes <= this.reminderWindow.to
-    )
   },
 
   loadPreference() {
@@ -278,12 +260,12 @@ export default {
     const currentMinutes = now.getHours() * 60 + now.getMinutes()
     const intervals = []
     const currentCourseKey = this.courseMatchKey(this.course)
-    // 07:00 到第一节课
+    // 第一节课前
     if (sorted.length > 0) {
       const firstRange = sorted[0]._parsedRange
       if (firstRange) {
         intervals.push({
-          from: 7 * 60,
+          from: firstRange.start - UPCOMING_REMINDER_MINUTES,
           to: firstRange.start,
           courseKey: this.courseMatchKey(sorted[0])
         })
@@ -295,7 +277,7 @@ export default {
       const currRange = sorted[i]._parsedRange
       if (prevRange && currRange && currRange.start > prevRange.end) {
         intervals.push({
-          from: prevRange.end,
+          from: Math.max(prevRange.end, currRange.start - UPCOMING_REMINDER_MINUTES),
           to: currRange.start,
           courseKey: this.courseMatchKey(sorted[i])
         })
