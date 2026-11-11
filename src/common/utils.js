@@ -1,11 +1,10 @@
 const prompt = require("@system.prompt")
+const storage = require("@system.storage")
+
+const STORAGE_KEY = "schedule_data"
 
 function formatTime(date) {
-  const hour = date.getHours()
-  const minute = date.getMinutes()
-  const hh = hour < 10 ? "0" + hour : hour + ""
-  const mm = minute < 10 ? "0" + minute : minute + ""
-  return hh + ":" + mm
+  return pad2(date.getHours()) + ":" + pad2(date.getMinutes())
 }
 
 function createEmptySchedule() {
@@ -23,12 +22,39 @@ function normalizeScheduleData(data) {
   if (!data || typeof data !== "object") {
     return createEmptySchedule()
   }
-  const normalized = {
-    courses: Array.isArray(data.courses) ? data.courses : [],
+  return {
+    courses: Array.isArray(data.courses)
+      ? data.courses.filter((item) => item && typeof item === "object")
+      : [],
     timeSlots: Array.isArray(data.timeSlots) ? data.timeSlots : [],
     config: data.config && typeof data.config === "object" ? data.config : {}
   }
-  return normalized
+}
+
+// 读取本地课表，数据损坏或不存在时返回空表
+function readSchedule(callback) {
+  storage.get({
+    key: STORAGE_KEY,
+    success: (raw) => {
+      let data = null
+      try {
+        data = JSON.parse(raw)
+      } catch (err) {
+        data = null
+      }
+      callback(normalizeScheduleData(data))
+    },
+    fail: () => callback(createEmptySchedule())
+  })
+}
+
+// 缺字段直接拒绝
+function tryExtractSchedule(raw) {
+  const payload = typeof raw === "string" ? JSON.parse(raw) : raw
+  if (!payload || !Array.isArray(payload.courses) || !Array.isArray(payload.timeSlots)) {
+    return null
+  }
+  return payload
 }
 
 function showToast(message) {
@@ -54,12 +80,21 @@ function timeToMinutes(text) {
   return hour * 60 + minute
 }
 
-function startClock(vm, interval) {
+function minutesOfDay() {
+  const now = new Date()
+  return now.getHours() * 60 + now.getMinutes()
+}
+
+// onTick 每拍回调一次，用于让「进行中」与进度条跟着时间走
+function startClock(vm, onTick) {
   stopClock(vm)
   vm.currentTime = formatTime(new Date())
   vm.timerId = setInterval(() => {
     vm.currentTime = formatTime(new Date())
-  }, interval || 30000)
+    if (typeof onTick === "function") {
+      onTick()
+    }
+  }, 30000)
 }
 
 function stopClock(vm) {
@@ -102,28 +137,17 @@ function getPickerIndex(event, options, fallbackIndex) {
   return fallbackIndex >= 0 ? fallbackIndex : 0
 }
 
-function parseTimeRange(timeText) {
-  if (!timeText || timeText.indexOf("-") < 0) {
-    return null
-  }
-  var parts = timeText.split("-")
-  var start = timeToMinutes(parts[0])
-  var end = timeToMinutes(parts[1])
-  if (start === null || end === null) {
-    return null
-  }
-  return { start: start, end: end }
-}
-
 module.exports = {
   formatTime,
+  minutesOfDay,
   createEmptySchedule,
   normalizeScheduleData,
+  readSchedule,
+  tryExtractSchedule,
   showToast,
   timeToMinutes,
   startClock,
   stopClock,
   pad2,
-  getPickerIndex,
-  parseTimeRange
+  getPickerIndex
 }

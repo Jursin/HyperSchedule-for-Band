@@ -47,27 +47,8 @@ import vibrator from "@system.vibrator"
 const STORAGE_KEY = "schedule_data"
 const utils = require("../../common/utils.js")
 
-function parseStoragePayload(raw) {
-  try {
-    return JSON.parse(raw)
-  } catch (err) {
-    return null
-  }
-}
-
-function validateSchedule(data) {
-  if (!data || !data.courses || !data.timeSlots) {
-    return false
-  }
-  if (!Array.isArray(data.courses) || !Array.isArray(data.timeSlots)) {
-    return false
-  }
-  return true
-}
-
 export default {
   private: {
-    scheduleData: utils.createEmptySchedule(),
     semesterStartDate: "",
     semesterTotalWeeks: "",
     clearConfirming: false,
@@ -98,35 +79,16 @@ export default {
   },
 
   loadData() {
-    const resetState = () => {
-      this.scheduleData = utils.createEmptySchedule()
-      this.semesterStartDate = ""
-      this.semesterTotalWeeks = ""
-      this.clearConfirming = false
-    }
-
-    storage.get({
-      key: STORAGE_KEY,
-      success: (raw) => {
-        const data = parseStoragePayload(raw)
-        if (validateSchedule(data)) {
-          this.scheduleData = data
-          // 有该字段时覆盖，无该字段时保留当前值
-          const incomingConfig = data.config || {}
-          if ("semesterStartDate" in incomingConfig) {
-            this.semesterStartDate = incomingConfig.semesterStartDate || ""
-          }
-          if ("semesterTotalWeeks" in incomingConfig) {
-            this.semesterTotalWeeks = incomingConfig.semesterTotalWeeks || ""
-          }
-          this.clearConfirming = false
-          return
-        }
-        resetState()
-      },
-      fail: () => {
-        resetState()
+    utils.readSchedule((data) => {
+      const config = data.config
+      // 有该字段时覆盖，无该字段时保留当前值
+      if ("semesterStartDate" in config) {
+        this.semesterStartDate = config.semesterStartDate || ""
       }
+      if ("semesterTotalWeeks" in config) {
+        this.semesterTotalWeeks = config.semesterTotalWeeks || ""
+      }
+      this.clearConfirming = false
     })
   },
 
@@ -138,19 +100,13 @@ export default {
 
   openDatePicker() {
     router.push({
-      uri: "/pages/date-picker",
-      params: {
-        semesterStartDate: this.semesterStartDate
-      }
+      uri: "/pages/date-picker"
     })
   },
 
   openWeekPicker() {
     router.push({
-      uri: "/pages/week-picker",
-      params: {
-        semesterTotalWeeks: this.semesterTotalWeeks
-      }
+      uri: "/pages/week-picker"
     })
   },
 

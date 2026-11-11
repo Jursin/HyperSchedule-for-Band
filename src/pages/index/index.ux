@@ -8,7 +8,7 @@
         <div class="date-arrow-button" onclick="goPrevDay">
           <image class="date-arrow-icon" src="/common/left.png"></image>
         </div>
-        <div class="date-center-wrap">
+        <div class="date-center-wrap" onclick="goToday">
           <div class="date-row">
             <text class="day-text">{{ selectedDayText }}</text>
             <text class="date-text">{{ selectedDateText }}</text>
@@ -35,7 +35,7 @@
                   <text class="course-name {{ centerHomeText ? 'text-centered' : '' }}">
                     {{ course.name }}
                   </text>
-                  <text class="course-meta {{ centerHomeText ? 'text-centered' : '' }}">
+                  <text class="course-meta {{ centerHomeText ? 'text-centered' : '' }}" if="{{ course.timeText }}">
                     {{ course.timeText }}
                   </text>
                   <text
@@ -76,7 +76,9 @@
                 ? "请先设置学期周数"
                 : notStarted
                   ? "暂未开学"
-                  : "今日无课程"
+                  : semesterEnded
+                    ? "学期已结束"
+                    : "今日无课程"
           }}
         </text>
       </div>
@@ -90,16 +92,11 @@
 
 <script>
 import router from "@system.router"
-import storage from "@system.storage"
-import interconnect from "@system.interconnect"
-import prompt from "@system.prompt"
 
 const preferences = require("../../common/preferences.js")
 const utils = require("../../common/utils.js")
-const STORAGE_KEY = "schedule_data"
-const conn = interconnect.instance()
-const DAY_SLIDE_TOTAL = 361
-const DAY_SLIDE_CENTER = Math.floor(DAY_SLIDE_TOTAL / 2)
+// 左右切换日期的上限
+const DAY_OFFSET_MAX = 180
 
 function formatDate(date) {
   const y = date.getFullYear()
@@ -108,16 +105,22 @@ function formatDate(date) {
   return y + "-" + m + "-" + d
 }
 
+// 周次以周一为界
+function mondayOf(date) {
+  const monday = new Date(formatDate(date) + "T00:00:00")
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+  return monday
+}
+
 function weekFromStart(startDate, targetDate) {
   if (!startDate) {
     return 0
   }
-  const start = new Date(startDate + "T00:00:00")
+  const start = mondayOf(new Date(startDate + "T00:00:00"))
   if (isNaN(start.getTime())) {
     return 0
   }
-  const base = targetDate instanceof Date ? targetDate : new Date()
-  const target = new Date(formatDate(base) + "T00:00:00")
+  const target = mondayOf(targetDate instanceof Date ? targetDate : new Date())
   const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000)
   if (diffDays < 0) {
     return -1
@@ -125,23 +128,8 @@ function weekFromStart(startDate, targetDate) {
   return Math.floor(diffDays / 7) + 1
 }
 
-function normalizeDay(day) {
-  if (day < 1 || day > 7) {
-    return 1
-  }
-  return day
-}
-
 function dayText(day) {
   return ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"][day] || "周一"
-}
-
-function dayOfWeekFromToday() {
-  const day = new Date().getDay()
-  if (day === 0) {
-    return 7
-  }
-  return day
 }
 
 function addDays(date, offsetDays) {
@@ -152,10 +140,7 @@ function addDays(date, offsetDays) {
 
 function dayOfWeekFromDate(date) {
   const day = date.getDay()
-  if (day === 0) {
-    return 7
-  }
-  return day
+  return day === 0 ? 7 : day
 }
 
 function formatMonthDay(date) {
@@ -164,146 +149,65 @@ function formatMonthDay(date) {
   return m + "-" + d
 }
 
-function parseJsonIfNeeded(raw) {
-  if (typeof raw !== "string") {
-    return raw
-  }
-  return JSON.parse(raw)
+function minutesToText(minutes) {
+  return utils.pad2(Math.floor(minutes / 60)) + ":" + utils.pad2(minutes % 60)
 }
 
-function tryExtractSchedule(rawPayload) {
-  let payload = parseJsonIfNeeded(rawPayload)
-  if (!payload || typeof payload !== "object") {
+function timeRange(startText, endText) {
+  const start = utils.timeToMinutes(startText)
+  const end = utils.timeToMinutes(endText)
+  if (start === null || end === null) {
     return null
   }
-
-  if (payload.scheduleData) {
-    payload = parseJsonIfNeeded(payload.scheduleData)
-  } else if (payload.data && !Array.isArray(payload.courses)) {
-    payload = parseJsonIfNeeded(payload.data)
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return null
-  }
-
-  if (!Array.isArray(payload.courses) || !Array.isArray(payload.timeSlots)) {
-    return null
-  }
-
-  return payload
+  return {start, end}
 }
 
-// 按实际开始时间排序
-function sectionSortValue(course) {
-  // 优先用自定义开始时间
-  if (course.customStartTime && /^\d{2}:\d{2}$/.test(course.customStartTime)) {
-    const [h, m] = course.customStartTime.split(":").map(Number)
-    return h * 60 + m
-  }
-  // 其次用标准课节时间
-  if (
-    course.startSection &&
-    course.startSection > 0 &&
-    course.timeText &&
-    course.timeText.indexOf("-") > 0
-  ) {
-    // 取 timeText 的开始时间
-    const startTime = course.timeText.split("-")[0]
-    if (/^\d{2}:\d{2}$/.test(startTime)) {
-      const [h, m] = startTime.split(":").map(Number)
-      return h * 60 + m
-    }
-    return course.startSection * 60 // 兜底
-  }
-  // 兜底
-  return 999
-}
-
-function timeEndToMinutes(timeText) {
-  let endTime = ""
-  if (timeText && timeText.indexOf("-") > 0) {
-    endTime = timeText.split("-")[1]
-  }
-  const [endHour, endMinute] = endTime ? endTime.split(":").map(Number) : [0, 0]
-  return endHour * 60 + endMinute
-}
-
+// 自定义时间优先，否则取起止节次的作息时间
 function resolveCourseRangeMinutes(item, startSlot, endSlot) {
   if (item.isCustomTime === true && item.customStartTime && item.customEndTime) {
-    const start = utils.timeToMinutes(item.customStartTime)
-    const end = utils.timeToMinutes(item.customEndTime)
-    if (start === null || end === null) {
-      return null
-    }
-    return {start, end}
+    return timeRange(item.customStartTime, item.customEndTime)
   }
-
   if (startSlot && endSlot) {
-    const start = utils.timeToMinutes(startSlot.startTime)
-    const end = utils.timeToMinutes(endSlot.endTime)
-    if (start === null || end === null) {
-      return null
-    }
-    return {start, end}
+    return timeRange(startSlot.startTime, endSlot.endTime)
   }
-
   return null
 }
 
-function isCourseOngoing(item, startSlot, endSlot, isToday) {
-  if (!isToday) {
-    return false
+// 按当前时刻刷新「进行中」与进度，值没变就不写，避免无谓渲染
+function applyTimeState(course, minutes, isToday) {
+  const range = course.range
+  const hasRange = !!range && range.end > range.start
+  let ongoing = false
+  let percent = 0
+  if (isToday && hasRange) {
+    ongoing = minutes >= range.start && minutes <= range.end
+    if (minutes <= range.start) {
+      percent = 0
+    } else if (minutes >= range.end) {
+      percent = 100
+    } else {
+      percent = Math.floor(((minutes - range.start) * 100) / (range.end - range.start))
+    }
   }
-  const range = resolveCourseRangeMinutes(item, startSlot, endSlot)
-  if (!range) {
-    return false
+  if (course.isOngoing !== ongoing) {
+    course.isOngoing = ongoing
   }
-  const now = new Date()
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
-  if (range.end <= range.start) {
-    return false
+  if (course.progressPercent !== percent) {
+    course.progressPercent = percent
   }
-  return nowMinutes >= range.start && nowMinutes <= range.end
-}
-
-function courseProgressPercent(item, startSlot, endSlot, isToday) {
-  if (!isToday) {
-    return 0
-  }
-  const range = resolveCourseRangeMinutes(item, startSlot, endSlot)
-  if (!range || range.end <= range.start) {
-    return 0
-  }
-  const now = new Date()
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
-  if (nowMinutes <= range.start) {
-    return 0
-  }
-  if (nowMinutes >= range.end) {
-    return 100
-  }
-  const percent = Math.floor(((nowMinutes - range.start) * 100) / (range.end - range.start))
-  if (percent < 0) {
-    return 0
-  }
-  if (percent > 100) {
-    return 100
-  }
-  return percent
 }
 
 export default {
   private: {
     scheduleData: utils.createEmptySchedule(),
-    selectedDay: dayOfWeekFromToday(),
-    selectedDayText: dayText(dayOfWeekFromToday()),
+    selectedDay: dayOfWeekFromDate(new Date()),
+    selectedDayText: dayText(dayOfWeekFromDate(new Date())),
     selectedDateText: formatMonthDay(new Date()),
     selectedOffsetDays: 0,
-    daySlideIndex: DAY_SLIDE_CENTER,
     displayCourses: [],
     hasCourses: false,
     notStarted: false,
+    semesterEnded: false,
     semesterStartDateMissing: false,
     semesterTotalWeeksMissing: false,
     currentWeek: 0,
@@ -314,19 +218,19 @@ export default {
     themeColor: preferences.getCachedThemeColor(),
     courseGroups: [],
     currentTime: "",
+    todayDate: formatDate(new Date()),
     timerId: 0
   },
 
   onInit() {
-    utils.startClock(this)
-    this.bindInterconnect()
-    this.initDaySlides()
+    this.startTicking()
+    this.bindImportRefresh()
     this.loadSchedule()
   },
 
   onDestroy() {
     utils.stopClock(this)
-    conn.onmessage = null
+    this.$app.$def.onScheduleImported = null
   },
 
   onHide() {
@@ -334,40 +238,46 @@ export default {
   },
 
   onShow() {
-    utils.startClock(this)
+    this.startTicking()
     this.loadSchedule()
   },
 
-  initDaySlides() {
-    this.applyDaySlideIndex(DAY_SLIDE_CENTER, true)
+  startTicking() {
+    utils.startClock(this, () => this.onClockTick())
   },
 
-  applyDaySlideIndex(index) {
-    let nextIndex = index
-    if (nextIndex < 0) {
-      nextIndex = 0
+  // 亮屏常看时也要让进度条动起来，跨天则整页重算
+  onClockTick() {
+    if (formatDate(new Date()) !== this.todayDate) {
+      this.afterLoad()
+      return
     }
-    if (nextIndex >= DAY_SLIDE_TOTAL) {
-      nextIndex = DAY_SLIDE_TOTAL - 1
+    if (this.selectedOffsetDays !== 0) {
+      return
     }
-
-    this.daySlideIndex = nextIndex
-    const offset = nextIndex - DAY_SLIDE_CENTER
-    const selectedDate = addDays(new Date(), offset)
-    this.selectedOffsetDays = offset
-    this.selectedDateText = formatMonthDay(selectedDate)
-    this.selectedDay = dayOfWeekFromDate(selectedDate)
-    this.selectedDayText = dayText(this.selectedDay)
-
-    this.afterLoad()
+    const courses = this.displayCourses
+    const minutes = utils.minutesOfDay()
+    for (let i = 0; i < courses.length; i += 1) {
+      applyTimeState(courses[i], minutes, true)
+    }
   },
 
+  // 左右箭头按天翻，点日期回到今天
   goPrevDay() {
-    this.applyDaySlideIndex(this.daySlideIndex - 1, true)
+    this.selectOffsetDays(this.selectedOffsetDays - 1)
   },
 
   goNextDay() {
-    this.applyDaySlideIndex(this.daySlideIndex + 1, true)
+    this.selectOffsetDays(this.selectedOffsetDays + 1)
+  },
+
+  goToday() {
+    this.selectOffsetDays(0)
+  },
+
+  selectOffsetDays(offset) {
+    this.selectedOffsetDays = Math.max(-DAY_OFFSET_MAX, Math.min(DAY_OFFSET_MAX, offset))
+    this.afterLoad()
   },
 
   openSettings() {
@@ -376,51 +286,11 @@ export default {
     })
   },
 
-  bindInterconnect() {
-    conn.onmessage = (event) => {
-      try {
-        const imported = tryExtractSchedule(event && event.data)
-        if (!imported) {
-          prompt.showToast({
-            message: "导入失败：配置格式不正确",
-            duration: 2000
-          })
-          return
-        }
-        const importedSchedule = utils.normalizeScheduleData(imported)
-        // 有该字段时覆盖，无该字段时保留旧配置
-        const prevConfig = (this.scheduleData && this.scheduleData.config) || {}
-        const importedConfig = imported.config || {}
-        if (!("semesterStartDate" in importedConfig)) {
-          importedSchedule.config.semesterStartDate = prevConfig.semesterStartDate
-        }
-        if (!("semesterTotalWeeks" in importedConfig)) {
-          importedSchedule.config.semesterTotalWeeks = prevConfig.semesterTotalWeeks
-        }
-        this.scheduleData = importedSchedule
-        storage.set({
-          key: STORAGE_KEY,
-          value: JSON.stringify(this.scheduleData),
-          success: () => {
-            prompt.showToast({
-              message: "导入成功",
-              duration: 1200
-            })
-          },
-          fail: () => {
-            prompt.showToast({
-              message: "导入失败：保存异常",
-              duration: 2000
-            })
-          }
-        })
-        this.afterLoad()
-      } catch (err) {
-        prompt.showToast({
-          message: "导入失败：" + err,
-          duration: 2000
-        })
-      }
+  // app.ux 收到推送后回调这里，刷新界面并回到今天
+  bindImportRefresh() {
+    this.$app.$def.onScheduleImported = (schedule) => {
+      this.scheduleData = schedule
+      this.selectOffsetDays(0)
     }
   },
 
@@ -429,27 +299,16 @@ export default {
     this.loadPreferences(() => {
       // 开发/调试时直接使用示例课表，生产版本走本地存储
       if (process.env.NODE_ENV !== "production") {
-        this.scheduleData = utils.normalizeScheduleData(
-          require("../../../examples/example-schedule.json")
-        )
-        this.afterLoad()
+        this.applySchedule(require("../../../examples/example-schedule.json"))
         return
       }
-      storage.get({
-        key: STORAGE_KEY,
-        success: (raw) => {
-          try {
-            this.scheduleData = utils.normalizeScheduleData(JSON.parse(raw))
-            this.afterLoad()
-          } catch (err) {
-            this.useDefaultData()
-          }
-        },
-        fail: () => {
-          this.useDefaultData()
-        }
-      })
+      utils.readSchedule((data) => this.applySchedule(data))
     })
+  },
+
+  applySchedule(data) {
+    this.scheduleData = utils.normalizeScheduleData(data)
+    this.afterLoad()
   },
 
   loadPreferences(callback) {
@@ -464,169 +323,101 @@ export default {
     })
   },
 
-  useDefaultData() {
-    const data = utils.createEmptySchedule()
-    this.scheduleData = data
-    storage.set({
-      key: STORAGE_KEY,
-      value: JSON.stringify(data)
-    })
-    this.afterLoad()
-  },
-
   afterLoad() {
-    const semesterStartDate =
-      this.scheduleData && this.scheduleData.config && this.scheduleData.config.semesterStartDate
-    const rawSemesterTotalWeeks =
-      this.scheduleData && this.scheduleData.config && this.scheduleData.config.semesterTotalWeeks
-    const semesterTotalWeeks = Number(rawSemesterTotalWeeks)
-    const hasSemesterStartDate = !!semesterStartDate
-    const hasSemesterTotalWeeks = !isNaN(semesterTotalWeeks) && semesterTotalWeeks > 0
-    this.selectedDay = normalizeDay(this.selectedDay)
-    const selectedDate = addDays(new Date(), this.selectedOffsetDays || 0)
+    const config = this.scheduleData.config
+    this.todayDate = formatDate(new Date())
+    const selectedDate = addDays(new Date(), this.selectedOffsetDays)
     this.selectedDateText = formatMonthDay(selectedDate)
     this.selectedDay = dayOfWeekFromDate(selectedDate)
     this.selectedDayText = dayText(this.selectedDay)
-    if (!hasSemesterStartDate) {
-      this.semesterStartDateMissing = true
-      this.semesterTotalWeeksMissing = false
-      this.currentWeek = 0
-      this.currentWeekText = "-"
-      this.notStarted = false
+
+    // 手机端没设开学日期时不推该字段
+    const semesterTotalWeeks = Number(config.semesterTotalWeeks)
+    this.semesterStartDateMissing = !config.semesterStartDate
+    this.semesterTotalWeeksMissing = !this.semesterStartDateMissing && !(semesterTotalWeeks > 0)
+    this.notStarted = false
+    this.semesterEnded = false
+    this.currentWeek = 0
+    this.currentWeekText = "-"
+    if (this.semesterStartDateMissing || this.semesterTotalWeeksMissing) {
       this.displayCourses = []
+      this.courseGroups = []
       this.hasCourses = false
       return
     }
 
-    this.semesterStartDateMissing = false
-    if (!hasSemesterTotalWeeks) {
-      this.semesterTotalWeeksMissing = true
-      this.currentWeek = 0
-      this.currentWeekText = "-"
-      this.notStarted = false
-      this.displayCourses = []
-      this.hasCourses = false
-      return
-    }
-
-    this.semesterTotalWeeksMissing = false
-
-    this.currentWeek = weekFromStart(
-      this.scheduleData && this.scheduleData.config && this.scheduleData.config.semesterStartDate,
-      selectedDate
-    )
     // 以配置的学期周数为学期结束依据
-    if (this.currentWeek < 0) {
-      this.notStarted = true
-      this.currentWeekText = "-"
-    } else if (this.currentWeek > semesterTotalWeeks) {
-      this.notStarted = true
-      this.currentWeekText = String(this.currentWeek)
-    } else {
-      this.notStarted = false
-      this.currentWeekText = this.currentWeek > 0 ? String(this.currentWeek) : "-"
-    }
+    this.currentWeek = weekFromStart(config.semesterStartDate, selectedDate)
+    this.notStarted = this.currentWeek < 0
+    this.semesterEnded = this.currentWeek > semesterTotalWeeks
+    this.currentWeekText = this.notStarted ? "-" : String(this.currentWeek)
     this.refreshCourses()
   },
 
   refreshCourses() {
-    const source = (this.scheduleData && this.scheduleData.courses) || []
-    const timeSlots = (this.scheduleData && this.scheduleData.timeSlots) || []
-    // 预建节次表，避免逐课程线性查找
     const slotMap = {}
+    const timeSlots = this.scheduleData.timeSlots
     for (let i = 0; i < timeSlots.length; i += 1) {
       slotMap[timeSlots[i].number] = timeSlots[i]
     }
-    const semesterTotalWeeks =
-      (this.scheduleData.config && this.scheduleData.config.semesterTotalWeeks) || 100
-    const isToday = (this.selectedOffsetDays || 0) === 0
-    const dayCourses = []
-    const currentWeekCourses = []
-    for (let i = 0; i < source.length; i += 1) {
-      const item = source[i]
-      if (item.day !== this.selectedDay) {
+    const isToday = this.selectedOffsetDays === 0
+    const minutes = utils.minutesOfDay()
+    const target = []
+    const courses = this.scheduleData.courses
+    for (let i = 0; i < courses.length; i += 1) {
+      const item = courses[i]
+      // 周次缺失或本周没有这门课
+      if (item.day !== this.selectedDay || (item.weeks || []).indexOf(this.currentWeek) < 0) {
         continue
       }
-      const hasCustomTime = item.isCustomTime === true
-      const startSlot = slotMap[item.startSection]
-      const endSlot = slotMap[item.endSection]
-      let timeText = ""
-      if (hasCustomTime && item.customStartTime && item.customEndTime) {
-        timeText = item.customStartTime + "-" + item.customEndTime
-      } else if (startSlot && endSlot) {
-        timeText = startSlot.startTime + "-" + endSlot.endTime
+      const range = resolveCourseRangeMinutes(
+        item,
+        slotMap[item.startSection],
+        slotMap[item.endSection]
+      )
+      // 手机端推送前已校验节次与时间，这里仅防脏数据
+      if (!range) {
+        console.warn("课程缺少时间区间，已跳过：" + item.name)
+        continue
       }
-      const normalized = {
+      const course = {
         name: item.name,
         position: this.prefixAtSymbol && item.position ? "@" + item.position : item.position || "",
         teacher: this.hideTeacher ? "" : item.teacher || "",
-        startSection: item.startSection,
-        customStartTime: item.customStartTime || "",
-        timeText: timeText,
-        isOngoing: isCourseOngoing(item, startSlot, endSlot, isToday),
-        progressPercent: courseProgressPercent(item, startSlot, endSlot, isToday)
+        timeText: minutesToText(range.start) + "-" + minutesToText(range.end),
+        // 详情页与排序、分组都用这份区间，不再反解析文本
+        range: range,
+        isOngoing: false,
+        progressPercent: 0
       }
-      // 预计算排序与分组值，避免排序/分组时重复解析
-      normalized.sortValue = sectionSortValue(normalized)
-      normalized.endMinutes = timeEndToMinutes(timeText)
-      dayCourses.push(normalized)
-
-      let showInCurrentWeek = false
-
-      if (item.weeks && item.weeks.length) {
-        if (this.currentWeek <= semesterTotalWeeks && item.weeks.indexOf(this.currentWeek) >= 0) {
-          showInCurrentWeek = true
-        }
-      } else if (item.weekType) {
-        if (this.currentWeek > 0 && this.currentWeek <= semesterTotalWeeks) {
-          if (item.weekType === "all") {
-            showInCurrentWeek = true
-          } else if (item.weekType === "odd" && this.currentWeek % 2 === 1) {
-            showInCurrentWeek = true
-          } else if (item.weekType === "even" && this.currentWeek % 2 === 0) {
-            showInCurrentWeek = true
-          }
-        }
-      } else {
-        showInCurrentWeek = true
-      }
-
-      if (showInCurrentWeek) {
-        currentWeekCourses.push(normalized)
-      }
+      applyTimeState(course, minutes, isToday)
+      target.push(course)
     }
 
-    const target = this.currentWeek > 0 ? currentWeekCourses : dayCourses
-
-    target.sort((a, b) => a.sortValue - b.sortValue)
+    target.sort((a, b) => a.range.start - b.range.start)
     this.displayCourses = target
     this.hasCourses = target.length > 0
 
     // 课程分组：仅按结束时间分组
-    const morning = []
-    const noon = []
-    const afternoon = []
-    const evening = []
-
-    for (let i = 0; i < target.length; i++) {
-      const course = target[i]
-      if (course.endMinutes < 12 * 60) {
-        morning.push(course)
-      } else if (course.endMinutes <= 14 * 60) {
-        noon.push(course)
-      } else if (course.endMinutes <= 19 * 60) {
-        afternoon.push(course)
+    const groups = [
+      {title: "上午", courses: []},
+      {title: "中午", courses: []},
+      {title: "下午", courses: []},
+      {title: "晚上", courses: []}
+    ]
+    for (let i = 0; i < target.length; i += 1) {
+      const end = target[i].range.end
+      if (end < 12 * 60) {
+        groups[0].courses.push(target[i])
+      } else if (end <= 14 * 60) {
+        groups[1].courses.push(target[i])
+      } else if (end <= 19 * 60) {
+        groups[2].courses.push(target[i])
       } else {
-        evening.push(course)
+        groups[3].courses.push(target[i])
       }
     }
-
-    this.courseGroups = [
-      {title: "上午", courses: morning},
-      {title: "中午", courses: noon},
-      {title: "下午", courses: afternoon},
-      {title: "晚上", courses: evening}
-    ]
+    this.courseGroups = groups
   },
 
   openCourseDetail(course) {

@@ -80,20 +80,9 @@ function daysInMonth(y, m) {
   return new Date(y, m, 0).getDate()
 }
 
-function getTodayDate() {
-  return {
-    y: TODAY.getFullYear(),
-    m: TODAY.getMonth() + 1,
-    d: TODAY.getDate()
-  }
-}
-
 export default {
   private: {
-    year: TODAY.getFullYear(),
-    month: TODAY.getMonth() + 1,
-    day: TODAY.getDate(),
-    dateText: formatDate(TODAY.getFullYear(), TODAY.getMonth() + 1, TODAY.getDate()),
+    dateText: "",
     yearOptions: [],
     monthOptions: [],
     dayOptions: [],
@@ -150,13 +139,11 @@ export default {
   },
 
   applyTodayDate() {
-    const today = getTodayDate()
-    this.applyDate(today.y, today.m, today.d)
+    this.applyDate(TODAY.getFullYear(), TODAY.getMonth() + 1, TODAY.getDate())
   },
 
   applySavedOrToday() {
-    const savedDate =
-      this.scheduleData && this.scheduleData.config && this.scheduleData.config.semesterStartDate
+    const savedDate = this.scheduleData.config.semesterStartDate
     const saved = parseDate(savedDate)
     if (saved) {
       this.applyDate(saved.y, saved.m, saved.d)
@@ -213,21 +200,9 @@ export default {
   },
 
   loadData() {
-    storage.get({
-      key: STORAGE_KEY,
-      success: (raw) => {
-        try {
-          this.scheduleData = utils.normalizeScheduleData(JSON.parse(raw))
-          this.applySavedOrToday()
-        } catch (e) {
-          this.scheduleData = utils.createEmptySchedule()
-          this.applyTodayDate()
-        }
-      },
-      fail: () => {
-        this.scheduleData = utils.createEmptySchedule()
-        this.applyTodayDate()
-      }
+    utils.readSchedule((data) => {
+      this.scheduleData = data
+      this.applySavedOrToday()
     })
   },
 
@@ -240,10 +215,7 @@ export default {
   },
 
   syncDateText() {
-    this.year = YEAR_MIN + this.yearIndex
-    this.month = this.monthIndex + 1
-    this.day = this.dayIndex + 1
-    this.dateText = formatDate(this.year, this.month, this.day)
+    this.dateText = formatDate(YEAR_MIN + this.yearIndex, this.monthIndex + 1, this.dayIndex + 1)
   },
 
   onYearChange(event) {
@@ -264,15 +236,6 @@ export default {
   },
 
   saveAndBack() {
-    if (!Array.isArray(this.scheduleData.courses)) {
-      this.scheduleData.courses = []
-    }
-    if (!Array.isArray(this.scheduleData.timeSlots)) {
-      this.scheduleData.timeSlots = []
-    }
-    if (!this.scheduleData.config) {
-      this.scheduleData.config = {}
-    }
     this.scheduleData.config.semesterStartDate = this.dateText
     storage.set({
       key: STORAGE_KEY,

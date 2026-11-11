@@ -36,8 +36,8 @@ import storage from "@system.storage"
 const preferences = require("../../common/preferences.js")
 const utils = require("../../common/utils.js")
 const STORAGE_KEY = "schedule_data"
-const WEEK_MIN = 10
-const WEEK_MAX = 30
+const WEEK_MIN = 1
+const WEEK_MAX = 60
 const DEFAULT_WEEK = 20
 
 export default {
@@ -88,33 +88,20 @@ export default {
   },
 
   applySavedOrDefault() {
-    const savedWeek =
-      this.scheduleData && this.scheduleData.config && this.scheduleData.config.semesterTotalWeeks
-    let targetWeek = parseInt(savedWeek, 10)
-
-    if (Number.isNaN(targetWeek) || targetWeek < WEEK_MIN || targetWeek > WEEK_MAX) {
-      targetWeek = DEFAULT_WEEK
-    }
+    const savedWeek = this.scheduleData.config.semesterTotalWeeks
+    const parsedWeek = parseInt(savedWeek, 10)
+    // 超出范围时取最近的合法值
+    const targetWeek = Number.isNaN(parsedWeek)
+      ? DEFAULT_WEEK
+      : Math.min(WEEK_MAX, Math.max(WEEK_MIN, parsedWeek))
 
     this.weekIndex = targetWeek - WEEK_MIN
   },
 
   loadData() {
-    storage.get({
-      key: STORAGE_KEY,
-      success: (raw) => {
-        try {
-          this.scheduleData = utils.normalizeScheduleData(JSON.parse(raw))
-          this.applySavedOrDefault()
-        } catch (e) {
-          this.scheduleData = utils.createEmptySchedule()
-          this.applySavedOrDefault()
-        }
-      },
-      fail: () => {
-        this.scheduleData = utils.createEmptySchedule()
-        this.applySavedOrDefault()
-      }
+    utils.readSchedule((data) => {
+      this.scheduleData = data
+      this.applySavedOrDefault()
     })
   },
 
@@ -127,16 +114,6 @@ export default {
   },
 
   saveAndBack() {
-    if (!Array.isArray(this.scheduleData.courses)) {
-      this.scheduleData.courses = []
-    }
-    if (!Array.isArray(this.scheduleData.timeSlots)) {
-      this.scheduleData.timeSlots = []
-    }
-    if (!this.scheduleData.config) {
-      this.scheduleData.config = {}
-    }
-
     const selectedWeek = WEEK_MIN + this.weekIndex
     this.scheduleData.config.semesterTotalWeeks = selectedWeek
 

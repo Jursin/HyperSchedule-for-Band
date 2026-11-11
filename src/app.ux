@@ -1,10 +1,54 @@
 <script>
+import storage from "@system.storage"
+import interconnect from "@system.interconnect"
+
 const preferences = require("./common/preferences.js")
+const utils = require("./common/utils.js")
+
+const STORAGE_KEY = "schedule_data"
+const conn = interconnect.instance()
 
 export default {
   onCreate() {
     // 启动时预载偏好，避免页面首帧显示默认主题色
     preferences.init()
+    // 消息统一在这里接收，页面销毁或还没初始化时也不会丢
+    conn.onmessage = (event) => this.onScheduleMessage(event)
+  },
+
+  onScheduleMessage(event) {
+    let imported = null
+    try {
+      imported = utils.tryExtractSchedule(event && event.data)
+    } catch (err) {
+      imported = null
+    }
+    if (!imported) {
+      utils.showToast("导入失败，数据格式不正确")
+      return
+    }
+    utils.readSchedule((prev) => this.saveImported(imported, prev))
+  },
+
+  saveImported(imported, prev) {
+    const schedule = utils.normalizeScheduleData(imported)
+    // 有该字段时覆盖，无该字段时保留旧配置
+    if (!("semesterStartDate" in (imported.config || {}))) {
+      schedule.config.semesterStartDate = prev.config.semesterStartDate
+    }
+    storage.set({
+      key: STORAGE_KEY,
+      value: JSON.stringify(schedule),
+      success: () => {
+        utils.showToast("已导入 " + schedule.courses.length + " 门课程")
+        // 首页在 onInit 里注册，用来即时刷新界面
+        const handler = this.$def && this.$def.onScheduleImported
+        if (typeof handler === "function") {
+          handler(schedule)
+        }
+      },
+      fail: () => utils.showToast("导入失败，保存异常")
+    })
   }
 }
 </script>

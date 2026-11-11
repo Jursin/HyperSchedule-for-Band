@@ -6,8 +6,8 @@
       </div>
       <div class="course-section">
         <text class="course-name">{{ course.name }}</text>
-        <text class="course-meta">{{ course.timeText }}</text>
-        <text class="course-meta">{{ course.position }}</text>
+        <text class="course-meta" if="{{ course.timeText }}">{{ course.timeText }}</text>
+        <text class="course-meta" if="{{ course.position }}">{{ course.position }}</text>
         <text class="course-meta" if="{{ course.teacher }}">{{ course.teacher }}</text>
         <text
           class="remaining-time"
@@ -59,6 +59,7 @@ export default {
       timeText: "",
       position: "",
       teacher: "",
+      range: null,
       isOngoing: false,
       progressPercent: 0
     },
@@ -68,7 +69,6 @@ export default {
   private: {
     currentTime: "",
     themeColor: preferences.getCachedThemeColor(),
-    prefixAtSymbol: false,
     remainingMinutes: 0,
     upcomingMinutes: 0,
     showUpcomingReminder: false,
@@ -93,9 +93,6 @@ export default {
     } catch (e) {
       console.error("Failed to parse params:", e)
     }
-    if (this.course && this.course.timeText) {
-      this.course._parsedRange = utils.parseTimeRange(this.course.timeText)
-    }
     this.initTodayCourseIndex()
     this.calculateRemainingTime()
     this.calculateUpcomingReminder()
@@ -116,19 +113,12 @@ export default {
     }, 1000)
   },
 
-  // 预处理当天课程排序
+  // 当天课程按开始时间排序，区间由首页算好随参数带过来
   initTodayCourseIndex() {
     const courses = Array.isArray(this.todayCourses) ? this.todayCourses : []
-    // 预解析时间，缓存到课程对象，避免后续重复解析
-    for (let i = 0; i < courses.length; i += 1) {
-      const item = courses[i]
-      if (item.timeText && !item._parsedRange) {
-        item._parsedRange = utils.parseTimeRange(item.timeText)
-      }
-    }
     this.sortedTodayCourses = courses.slice().sort((a, b) => {
-      const t1 = a._parsedRange ? a._parsedRange.start : 0
-      const t2 = b._parsedRange ? b._parsedRange.start : 0
+      const t1 = a.range ? a.range.start : 0
+      const t2 = b.range ? b.range.start : 0
       return t1 - t2
     })
   },
@@ -136,7 +126,6 @@ export default {
   loadPreference() {
     preferences.getPreferences((pref) => {
       this.themeColor = pref.themeColor
-      this.prefixAtSymbol = !!pref.prefixAtSymbol
     })
   },
 
@@ -144,56 +133,43 @@ export default {
     if (!course || typeof course !== "object") {
       return ""
     }
-    // 使用名称+时间作为匹配键
     return (course.name || "") + "|" + (course.timeText || "")
   },
 
   // 上课时底部显示下一节课课程名和教室
   calculateNextCourse() {
-    let nextName = ""
-    let nextPosition = ""
-    if (
-      this.course &&
-      this.course.isOngoing &&
-      Array.isArray(this.todayCourses) &&
-      this.todayCourses.length > 0
-    ) {
-      const currentEndMinutes = this.course._parsedRange ? this.course._parsedRange.end : null
-      if (currentEndMinutes !== null) {
-        const currentKey = this.courseMatchKey(this.course)
-        for (let i = 0; i < this.todayCourses.length; i++) {
-          const item = this.todayCourses[i]
-          if (this.courseMatchKey(item) === currentKey) {
-            continue
-          }
-          const range = item._parsedRange
-          if (range && range.start > currentEndMinutes) {
-            nextName = item.name || ""
-            nextPosition = item.position || ""
-            break
-          }
+    let next = null
+    if (this.course.isOngoing && this.course.range) {
+      for (let i = 0; i < this.sortedTodayCourses.length; i += 1) {
+        const item = this.sortedTodayCourses[i]
+        if (item.range && item.range.start > this.course.range.end) {
+          next = item
+          break
         }
       }
     }
+    const name = next ? next.name || "" : ""
+    const position = next ? next.position || "" : ""
     // 仅在值变化时更新，避免每秒触发渲染
-    if (this.nextCourse.name !== nextName || this.nextCourse.position !== nextPosition) {
-      this.nextCourse.name = nextName
-      this.nextCourse.position = nextPosition
+    if (this.nextCourse.name !== name || this.nextCourse.position !== position) {
+      this.nextCourse.name = name
+      this.nextCourse.position = position
+    }
+  },
+
+  stopDetailTimer() {
+    if (this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
     }
   },
 
   onDestroy() {
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
+    this.stopDetailTimer()
   },
 
   onHide() {
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
+    this.stopDetailTimer()
   },
 
   onShow() {
@@ -205,14 +181,14 @@ export default {
 
   updateCurrentTime() {
     const now = new Date()
-    const hours = String(now.getHours()).padStart(2, "0")
-    const minutes = String(now.getMinutes()).padStart(2, "0")
-    const seconds = String(now.getSeconds()).padStart(2, "0")
-    this.currentTime = `${hours}:${minutes}:${seconds}`
+    const hh = utils.pad2(now.getHours())
+    const mm = utils.pad2(now.getMinutes())
+    const ss = utils.pad2(now.getSeconds())
+    this.currentTime = hh + ":" + mm + ":" + ss
   },
 
   calculateRemainingTime() {
-    const range = this.course._parsedRange || utils.parseTimeRange(this.course.timeText)
+    const range = this.course.range
     if (!range) return
 
     const now = new Date()
@@ -242,72 +218,41 @@ export default {
     this.remainingMinutes = Math.ceil(remainingSeconds / 60)
     const durationSeconds = totalEndSeconds - totalStartSeconds
     if (durationSeconds > 0) {
-      let percent = Math.floor(((totalCurrentSeconds - totalStartSeconds) * 100) / durationSeconds)
-      if (percent < 0) percent = 0
-      if (percent > 100) percent = 100
-      this.course.progressPercent = percent
+      this.course.progressPercent = Math.floor(
+        ((totalCurrentSeconds - totalStartSeconds) * 100) / durationSeconds
+      )
     }
   },
 
-  // 上课提醒和进度条
+  // 上课提醒和进度条：仅在本节课开课前 30 分钟内显示
   calculateUpcomingReminder() {
-    if (!this.sortedTodayCourses || this.sortedTodayCourses.length === 0) {
+    const range = this.course.range
+    if (!range) {
       this.showUpcomingReminder = false
       return
     }
-    const sorted = this.sortedTodayCourses
-    const now = new Date()
-    const currentMinutes = now.getHours() * 60 + now.getMinutes()
-    const intervals = []
-    const currentCourseKey = this.courseMatchKey(this.course)
-    // 第一节课前
-    if (sorted.length > 0) {
-      const firstRange = sorted[0]._parsedRange
-      if (firstRange) {
-        intervals.push({
-          from: firstRange.start - UPCOMING_REMINDER_MINUTES,
-          to: firstRange.start,
-          courseKey: this.courseMatchKey(sorted[0])
-        })
+    const key = this.courseMatchKey(this.course)
+    let from = -1
+    for (let i = 0; i < this.sortedTodayCourses.length; i += 1) {
+      const item = this.sortedTodayCourses[i]
+      if (!item.range || this.courseMatchKey(item) !== key) {
+        continue
       }
+      const prevRange = i > 0 ? this.sortedTodayCourses[i - 1].range : null
+      const prevEnd = prevRange ? prevRange.end : range.start - UPCOMING_REMINDER_MINUTES
+      from = Math.max(prevEnd, range.start - UPCOMING_REMINDER_MINUTES)
+      break
     }
-    // 两节课之间
-    for (let i = 1; i < sorted.length; i++) {
-      const prevRange = sorted[i - 1]._parsedRange
-      const currRange = sorted[i]._parsedRange
-      if (prevRange && currRange && currRange.start > prevRange.end) {
-        intervals.push({
-          from: Math.max(prevRange.end, currRange.start - UPCOMING_REMINDER_MINUTES),
-          to: currRange.start,
-          courseKey: this.courseMatchKey(sorted[i])
-        })
-      }
+    const currentMinutes = utils.minutesOfDay()
+    const show = from >= 0 && currentMinutes >= from && currentMinutes < range.start
+    this.showUpcomingReminder = show
+    if (!show) {
+      return
     }
-    let matched = null
-    for (let i = 0; i < intervals.length; i++) {
-      const itv = intervals[i]
-      if (
-        currentMinutes >= itv.from &&
-        currentMinutes < itv.to &&
-        currentCourseKey &&
-        currentCourseKey === itv.courseKey
-      ) {
-        matched = itv
-        break
-      }
-    }
-    if (matched) {
-      this.upcomingMinutes = matched.to - currentMinutes
-      this.showUpcomingReminder = true
-      let percent = Math.floor(
-        ((currentMinutes - matched.from) * 100) / (matched.to - matched.from)
-      )
-      if (percent < 0) percent = 0
-      if (percent > 100) percent = 100
-      this.upcomingProgressPercent = percent
-    } else {
-      this.showUpcomingReminder = false
-    }
+    this.upcomingMinutes = range.start - currentMinutes
+    this.upcomingProgressPercent = Math.floor(
+      ((currentMinutes - from) * 100) / (range.start - from)
+    )
   }
 }
 </script>
