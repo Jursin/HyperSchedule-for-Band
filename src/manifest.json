@@ -1,8 +1,8 @@
 {
-  "package": "com.schedule.vela",
-  "name": "腕上课程表",
-  "versionName": "2.0.2",
-  "versionCode": 14,
+  "package": "com.hyperschedule.app",
+  "name": "课程表",
+  "versionName": "2.1.0",
+  "versionCode": 15,
   "minPlatformVersion": 1000,
   "icon": "/common/logo.png",
   "deviceTypeList": ["watch"],
