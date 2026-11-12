@@ -12,9 +12,8 @@
       <text class="title-text">{{ currentTime }}</text>
     </div>
     <image class="app-icon" src="{{ appInfo.icon }}"></image>
-    <text class="app-name">{{ appInfo.name }}</text>
-    <text class="app-meta">版本名称：{{ appInfo.versionName }}</text>
-    <text class="app-meta">版本号：{{ appInfo.versionCode }}</text>
+    <text class="app-name">HyperSchedule</text>
+    <text class="app-meta">v{{ appInfo.versionName }}({{ appInfo.versionCode }})</text>
     <text class="app-meta">开发者: Jursin</text>
   </div>
 </template>
@@ -29,7 +28,6 @@ export default {
   private: {
     appInfo: {
       icon: "",
-      name: "",
       versionName: "",
       versionCode: ""
     },
@@ -43,7 +41,6 @@ export default {
     if (info) {
       this.appInfo = {
         icon: info.icon || "",
-        name: info.name || "",
         versionName: info.versionName || "",
         versionCode: info.versionCode || ""
       }
@@ -140,7 +137,7 @@ export default {
 
 .app-name {
   color: #ffffff;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 800;
   margin-bottom: 15px;
   text-align: center;
@@ -178,7 +175,7 @@ export default {
   }
 
   .app-name {
-    font-size: 32px;
+    font-size: 28px;
   }
 
   .app-meta {

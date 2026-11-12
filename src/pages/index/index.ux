@@ -21,7 +21,12 @@
     </div>
 
     <div class="course-content">
-      <scroll class="course-list-scroll" scroll-y="true" bounces="true" if="{{ !notStarted && hasCourses }}">
+      <scroll
+        class="course-list-scroll"
+        scroll-y="true"
+        bounces="true"
+        if="{{ !notStarted && hasCourses }}"
+      >
         <block for="{{ group in courseGroups }}">
           <block if="{{ group.courses.length > 0 }}">
             <text class="section-title">{{ group.title }}</text>
@@ -32,20 +37,32 @@
                   style="{{ course.isOngoing ? 'background-color:' + themeColor : '' }}"
                   onclick="openCourseDetail(course)"
                 >
-                  <text class="course-name {{ centerHomeText ? 'text-centered' : '' }}">
-                    {{ course.name }}
+                  <text
+                    class="course-meta {{ centerHomeText ? 'text-centered' : '' }} {{ course.isEnded ? 'text-ended' : '' }}"
+                    if="{{ course.sectionText }}"
+                  >
+                    {{ course.sectionText }}
                   </text>
-                  <text class="course-meta {{ centerHomeText ? 'text-centered' : '' }}" if="{{ course.timeText }}">
-                    {{ course.timeText }}
+                  <text
+                    class="course-name {{ centerHomeText ? 'text-centered' : '' }} {{ course.isEnded ? 'text-ended' : '' }}"
+                  >
+                    {{ course.name }}
                   </text>
                   <text
                     class="course-meta {{ centerHomeText ? 'text-centered' : '' }}"
+                    style="color: {{ course.timeColor }}"
+                    if="{{ course.timeText }}"
+                  >
+                    {{ course.timeText }}
+                  </text>
+                  <text
+                    class="course-meta {{ centerHomeText ? 'text-centered' : '' }} {{ course.isEnded ? 'text-ended' : '' }}"
                     if="{{ course.position }}"
                   >
                     {{ course.position }}
                   </text>
                   <text
-                    class="course-meta {{ centerHomeText ? 'text-centered' : '' }}"
+                    class="course-meta {{ centerHomeText ? 'text-centered' : '' }} {{ course.isEnded ? 'text-ended' : '' }}"
                     if="{{ course.teacher }}"
                   >
                     {{ course.teacher }}
@@ -65,20 +82,18 @@
 
       <div
         class="state-wrap"
-        if="{{ semesterStartDateMissing || semesterTotalWeeksMissing || notStarted || !hasCourses }}"
+        if="{{ configMissing || notStarted || !hasCourses }}"
       >
         <image class="empty-icon" src="/common/rest.png"></image>
         <text class="empty-text">
           {{
-            semesterStartDateMissing
-              ? "请先设置开学日期"
-              : semesterTotalWeeksMissing
-                ? "请先设置学期周数"
-                : notStarted
-                  ? "暂未开学"
-                  : semesterEnded
-                    ? "学期已结束"
-                    : "今日无课程"
+            configMissing
+              ? "请先在手机端推送课表"
+              : notStarted
+                ? "暂未开学"
+                : semesterEnded
+                  ? "学期已结束"
+                  : "今日无课程"
           }}
         </text>
       </div>
@@ -153,6 +168,24 @@ function minutesToText(minutes) {
   return utils.pad2(Math.floor(minutes / 60)) + ":" + utils.pad2(minutes % 60)
 }
 
+// 已结束课程整卡文字透明度
+const ENDED_TEXT_ALPHA = 0.45
+
+// 主题色转带透明度的 rgba
+function hexToRgba(hex, alpha) {
+  const value = String(hex || "").replace("#", "")
+  if (value.length !== 6) {
+    return "rgba(255, 255, 255, " + alpha + ")"
+  }
+  const r = parseInt(value.substring(0, 2), 16)
+  const g = parseInt(value.substring(2, 4), 16)
+  const b = parseInt(value.substring(4, 6), 16)
+  if (isNaN(r) || isNaN(g) || isNaN(b)) {
+    return "rgba(255, 255, 255, " + alpha + ")"
+  }
+  return "rgba(" + r + ", " + g + ", " + b + ", " + alpha + ")"
+}
+
 function timeRange(startText, endText) {
   const start = utils.timeToMinutes(startText)
   const end = utils.timeToMinutes(endText)
@@ -173,27 +206,52 @@ function resolveCourseRangeMinutes(item, startSlot, endSlot) {
   return null
 }
 
-// 按当前时刻刷新「进行中」与进度，值没变就不写，避免无谓渲染
-function applyTimeState(course, minutes, isToday) {
+function sectionTextOf(item) {
+  if (item.isCustomTime === true) {
+    return ""
+  }
+  const start = Number(item.startSection)
+  const end = Number(item.endSection)
+  if (!(start > 0)) {
+    return ""
+  }
+  return end > start ? "第" + start + "-" + end + "节" : "第" + start + "节"
+}
+
+// 按当前时刻刷新「进行中」「已结束」与进度，值没变就不写
+function applyTimeState(course, minutes, dayOffset, themeColor, endedTimeColor) {
   const range = course.range
   const hasRange = !!range && range.end > range.start
   let ongoing = false
+  let ended = false
   let percent = 0
-  if (isToday && hasRange) {
-    ongoing = minutes >= range.start && minutes <= range.end
-    if (minutes <= range.start) {
-      percent = 0
-    } else if (minutes >= range.end) {
-      percent = 100
-    } else {
-      percent = Math.floor(((minutes - range.start) * 100) / (range.end - range.start))
+  if (hasRange) {
+    if (dayOffset < 0) {
+      ended = true
+    } else if (dayOffset === 0) {
+      ended = minutes >= range.end
+      ongoing = minutes >= range.start && !ended
+      if (minutes <= range.start) {
+        percent = 0
+      } else if (ended) {
+        percent = 100
+      } else {
+        percent = Math.floor(((minutes - range.start) * 100) / (range.end - range.start))
+      }
     }
   }
   if (course.isOngoing !== ongoing) {
     course.isOngoing = ongoing
   }
+  if (course.isEnded !== ended) {
+    course.isEnded = ended
+  }
   if (course.progressPercent !== percent) {
     course.progressPercent = percent
+  }
+  const timeColor = ongoing ? "#ffffff" : ended ? endedTimeColor : themeColor
+  if (course.timeColor !== timeColor) {
+    course.timeColor = timeColor
   }
 }
 
@@ -208,14 +266,16 @@ export default {
     hasCourses: false,
     notStarted: false,
     semesterEnded: false,
-    semesterStartDateMissing: false,
-    semesterTotalWeeksMissing: false,
+    configMissing: false,
+    morningSplit: 12 * 60,
+    eveningSplit: 18 * 60,
     currentWeek: 0,
     currentWeekText: "-",
     hideTeacher: false,
     centerHomeText: false,
     prefixAtSymbol: false,
     themeColor: preferences.getCachedThemeColor(),
+    endedTimeColor: hexToRgba(preferences.getCachedThemeColor(), ENDED_TEXT_ALPHA),
     courseGroups: [],
     currentTime: "",
     todayDate: formatDate(new Date()),
@@ -258,7 +318,7 @@ export default {
     const courses = this.displayCourses
     const minutes = utils.minutesOfDay()
     for (let i = 0; i < courses.length; i += 1) {
-      applyTimeState(courses[i], minutes, true)
+      applyTimeState(courses[i], minutes, 0, this.themeColor, this.endedTimeColor)
     }
   },
 
@@ -297,11 +357,6 @@ export default {
   loadSchedule() {
     // 先加载偏好设置，再加载课表，避免首屏闪现老师名
     this.loadPreferences(() => {
-      // 开发/调试时直接使用示例课表，生产版本走本地存储
-      if (process.env.NODE_ENV !== "production") {
-        this.applySchedule(require("../../../examples/example-schedule.json"))
-        return
-      }
       utils.readSchedule((data) => this.applySchedule(data))
     })
   },
@@ -317,6 +372,7 @@ export default {
       this.centerHomeText = !!pref.centerHomeText
       this.prefixAtSymbol = !!pref.prefixAtSymbol
       this.themeColor = pref.themeColor
+      this.endedTimeColor = hexToRgba(this.themeColor, ENDED_TEXT_ALPHA)
       if (callback) {
         callback()
       }
@@ -331,20 +387,21 @@ export default {
     this.selectedDay = dayOfWeekFromDate(selectedDate)
     this.selectedDayText = dayText(this.selectedDay)
 
-    // 手机端没设开学日期时不推该字段
     const semesterTotalWeeks = Number(config.semesterTotalWeeks)
-    this.semesterStartDateMissing = !config.semesterStartDate
-    this.semesterTotalWeeksMissing = !this.semesterStartDateMissing && !(semesterTotalWeeks > 0)
+    this.configMissing = !config.semesterStartDate || !(semesterTotalWeeks > 0)
     this.notStarted = false
     this.semesterEnded = false
     this.currentWeek = 0
     this.currentWeekText = "-"
-    if (this.semesterStartDateMissing || this.semesterTotalWeeksMissing) {
+    if (this.configMissing) {
       this.displayCourses = []
       this.courseGroups = []
       this.hasCourses = false
       return
     }
+    const splits = utils.periodSplits(config)
+    this.morningSplit = splits.morning
+    this.eveningSplit = splits.evening
 
     // 以配置的学期周数为学期结束依据
     this.currentWeek = weekFromStart(config.semesterStartDate, selectedDate)
@@ -360,7 +417,7 @@ export default {
     for (let i = 0; i < timeSlots.length; i += 1) {
       slotMap[timeSlots[i].number] = timeSlots[i]
     }
-    const isToday = this.selectedOffsetDays === 0
+    const dayOffset = this.selectedOffsetDays
     const minutes = utils.minutesOfDay()
     const target = []
     const courses = this.scheduleData.courses
@@ -382,15 +439,19 @@ export default {
       }
       const course = {
         name: item.name,
+        sectionText: sectionTextOf(item),
         position: this.prefixAtSymbol && item.position ? "@" + item.position : item.position || "",
         teacher: this.hideTeacher ? "" : item.teacher || "",
+        remark: item.remark || "",
         timeText: minutesToText(range.start) + "-" + minutesToText(range.end),
         // 详情页与排序、分组都用这份区间，不再反解析文本
         range: range,
         isOngoing: false,
+        isEnded: false,
+        timeColor: this.themeColor,
         progressPercent: 0
       }
-      applyTimeState(course, minutes, isToday)
+      applyTimeState(course, minutes, dayOffset, this.themeColor, this.endedTimeColor)
       target.push(course)
     }
 
@@ -398,23 +459,20 @@ export default {
     this.displayCourses = target
     this.hasCourses = target.length > 0
 
-    // 课程分组：仅按结束时间分组
+    // 按开始时间分隔时段
     const groups = [
       {title: "上午", courses: []},
-      {title: "中午", courses: []},
       {title: "下午", courses: []},
       {title: "晚上", courses: []}
     ]
     for (let i = 0; i < target.length; i += 1) {
-      const end = target[i].range.end
-      if (end < 12 * 60) {
+      const start = target[i].range.start
+      if (start < this.morningSplit) {
         groups[0].courses.push(target[i])
-      } else if (end <= 14 * 60) {
+      } else if (start < this.eveningSplit) {
         groups[1].courses.push(target[i])
-      } else if (end <= 19 * 60) {
-        groups[2].courses.push(target[i])
       } else {
-        groups[3].courses.push(target[i])
+        groups[2].courses.push(target[i])
       }
     }
     this.courseGroups = groups
@@ -565,6 +623,10 @@ export default {
 
 .text-centered {
   text-align: center;
+}
+
+.text-ended {
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .course-progress {

@@ -27,15 +27,11 @@ export default {
       utils.showToast("导入失败，数据格式不正确")
       return
     }
-    utils.readSchedule((prev) => this.saveImported(imported, prev))
+    this.saveImported(imported)
   },
 
-  saveImported(imported, prev) {
+  saveImported(imported) {
     const schedule = utils.normalizeScheduleData(imported)
-    // 有该字段时覆盖，无该字段时保留旧配置
-    if (!("semesterStartDate" in (imported.config || {}))) {
-      schedule.config.semesterStartDate = prev.config.semesterStartDate
-    }
     storage.set({
       key: STORAGE_KEY,
       value: JSON.stringify(schedule),

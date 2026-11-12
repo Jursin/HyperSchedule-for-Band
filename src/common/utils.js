@@ -3,6 +3,10 @@ const storage = require("@system.storage")
 
 const STORAGE_KEY = "schedule_data"
 
+// 时段分隔默认值
+const DEFAULT_MORNING_SPLIT = "12:00"
+const DEFAULT_EVENING_SPLIT = "18:00"
+
 function formatTime(date) {
   return pad2(date.getHours()) + ":" + pad2(date.getMinutes())
 }
@@ -13,8 +17,30 @@ function createEmptySchedule() {
     timeSlots: [],
     config: {
       semesterStartDate: "",
-      semesterTotalWeeks: ""
+      semesterTotalWeeks: "",
+      morningAfternoonSplit: DEFAULT_MORNING_SPLIT,
+      afternoonEveningSplit: DEFAULT_EVENING_SPLIT
     }
+  }
+}
+
+function normalizeConfig(raw) {
+  const config = raw && typeof raw === "object" ? raw : {}
+  return {
+    semesterStartDate: config.semesterStartDate || "",
+    semesterTotalWeeks: config.semesterTotalWeeks || "",
+    morningAfternoonSplit: config.morningAfternoonSplit || DEFAULT_MORNING_SPLIT,
+    afternoonEveningSplit: config.afternoonEveningSplit || DEFAULT_EVENING_SPLIT
+  }
+}
+
+function periodSplits(config) {
+  const normalized = normalizeConfig(config)
+  const morning = timeToMinutes(normalized.morningAfternoonSplit)
+  const evening = timeToMinutes(normalized.afternoonEveningSplit)
+  return {
+    morning: morning === null ? timeToMinutes(DEFAULT_MORNING_SPLIT) : morning,
+    evening: evening === null ? timeToMinutes(DEFAULT_EVENING_SPLIT) : evening
   }
 }
 
@@ -27,7 +53,7 @@ function normalizeScheduleData(data) {
       ? data.courses.filter((item) => item && typeof item === "object")
       : [],
     timeSlots: Array.isArray(data.timeSlots) ? data.timeSlots : [],
-    config: data.config && typeof data.config === "object" ? data.config : {}
+    config: normalizeConfig(data.config)
   }
 }
 
@@ -141,6 +167,8 @@ module.exports = {
   formatTime,
   minutesOfDay,
   createEmptySchedule,
+  normalizeConfig,
+  periodSplits,
   normalizeScheduleData,
   readSchedule,
   tryExtractSchedule,

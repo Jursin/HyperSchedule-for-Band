@@ -44,6 +44,15 @@
           onchange="toggleHideTeacher"
         ></switch>
       </div>
+      <div class="settings-item switch-row">
+        <text class="switch-label">隐藏备注</text>
+        <switch
+          class="item-switch"
+          checked="{{ hideRemark }}"
+          style="track-color: {{ themeColor }}"
+          onchange="toggleHideRemark"
+        ></switch>
+      </div>
     </scroll>
   </div>
 </template>
@@ -67,6 +76,7 @@ const COLOR_NAMES = {
 export default {
   private: {
     hideTeacher: false,
+    hideRemark: false,
     themeColor: preferences.getCachedThemeColor(),
     themeColorName: "",
     centerHomeText: false,
@@ -100,6 +110,7 @@ export default {
   loadPreferences() {
     preferences.getPreferences((pref) => {
       this.hideTeacher = !!pref.hideTeacher
+      this.hideRemark = pref.hideRemark === true
       this.centerHomeText = !!pref.centerHomeText
       this.prefixAtSymbol = !!pref.prefixAtSymbol
       this.themeColor = pref.themeColor
@@ -121,6 +132,11 @@ export default {
   toggleHideTeacher(event) {
     this.hideTeacher = !!event.checked
     this.savePreferences({hideTeacher: this.hideTeacher})
+  },
+
+  toggleHideRemark(event) {
+    this.hideRemark = !!event.checked
+    this.savePreferences({hideRemark: this.hideRemark})
   },
 
   toggleCenterHomeText(event) {

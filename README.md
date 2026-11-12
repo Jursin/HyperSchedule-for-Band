@@ -14,14 +14,14 @@ HyperSchedule 穿戴端快应用，适用于 Xiaomi Vela OS
 > 为支持新开发的移动端应用，本快应用已修改包名，只能重新安装
 
 ## ✨ 功能特性
-- 以卡片形式显示每日课程及详细信息
-- 用主题色高亮正在进行的课程卡片
-- 每日课程分时间段显示
-- 可自由切换显示上/下一天课程
-- 点击课程卡片进入全屏显示
-- 显示上/下课倒计时和进度条
-- 上课时详情页显示下一节课课程和教室
-- 支持首页文本居中、地点前添加@、隐藏授课老师等偏好
+- 首页课程卡片支持显示节次、名称、时间、地点、教师
+- 每日课程按时段分隔显示
+- 用主题色高亮正在进行的课程卡片，已结束课程文字变暗
+- 可切换上/下一天课程，点击日期回到今日
+- 点击课程卡片进入详情页，显示当前时间、课程信息并支持显示备注
+- 课程卡片与详情页支持显示上/下课倒计时和进度条
+- 上课时详情页显示下一节课课程名称和地点
+- 支持首页文本居中、地点前添加@、隐藏授课老师、隐藏备注等偏好
 - 支持多种预设主题色
 
 ## 🖼️ 预览图
@@ -41,7 +41,7 @@ HyperSchedule 穿戴端快应用，适用于 Xiaomi Vela OS
 [![自定义表盘工具](https://img.shields.io/badge/%E9%80%9A%E8%BF%87%E8%87%AA%E5%AE%9A%E4%B9%89%E8%A1%A8%E7%9B%98%E5%B7%A5%E5%85%B7%E8%8E%B7%E5%8F%96-black?style=for-the-badge)](https://api.bandbbs.cn/wftools/bandbbs.html?code=A&state=1855993)
 
 > [!note]
-> 导入课表需通过 AstroBox 插件或[Android 端应用](https://github.com/Jursin/HyperSchedule/releases/latest)，详情请阅读[文档](https://blog.jursin.top/blog/tutorials/schedule-vela.html)
+> 导入课表需通过 [Android 端应用](https://github.com/Jursin/HyperSchedule/releases/latest)或 AstroBox 插件，详情请阅读[文档](https://blog.jursin.top/blog/tutorials/schedule-vela.html)
 
 ## 💻 开发
 - 环境：Node.js
@@ -84,7 +84,7 @@ HyperSchedule 穿戴端快应用，适用于 Xiaomi Vela OS
 
 ## 📦 相关仓库
 - Android 端应用：[Jursin/HyperSchedule](https://github.com/Jursin/HyperSchedule)
-- 同步器 AstroBox v2 插件：[Jursin/Schedule-AstroBox-Plugin](https://github.com/Jursin/Schedule-AstroBox-Plugin)
+- AstroBox v2 同步器插件：[Jursin/Schedule-AstroBox-Plugin](https://github.com/Jursin/Schedule-AstroBox-Plugin)
 
 ## 📖 参考
 - [Xiaomi Vela JS 应用开发文档](https://iot.mi.com/vela/quickapp)

@@ -47,6 +47,8 @@
   ],
   "config": {
     "semesterStartDate": "2026-03-02",
-    "semesterTotalWeeks": 18
+    "semesterTotalWeeks": 18,
+    "morningAfternoonSplit": "12:00",
+    "afternoonEveningSplit": "18:00"
   }
 }

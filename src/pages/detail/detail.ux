@@ -6,7 +6,9 @@
       </div>
       <div class="course-section">
         <text class="course-name">{{ course.name }}</text>
-        <text class="course-meta" if="{{ course.timeText }}">{{ course.timeText }}</text>
+        <text class="course-meta" style="color: {{ themeColor }}" if="{{ course.timeText }}">
+          {{ course.timeText }}
+        </text>
         <text class="course-meta" if="{{ course.position }}">{{ course.position }}</text>
         <text class="course-meta" if="{{ course.teacher }}">{{ course.teacher }}</text>
         <text
@@ -41,6 +43,9 @@
           {{ nextCourse.position }}
         </text>
       </div>
+      <div class="remark-section" if="{{ !hideRemark && course.remark }}">
+        <text class="remark-text">{{ course.remark }}</text>
+      </div>
     </scroll>
   </div>
 </template>
@@ -59,6 +64,7 @@ export default {
       timeText: "",
       position: "",
       teacher: "",
+      remark: "",
       range: null,
       isOngoing: false,
       progressPercent: 0
@@ -69,6 +75,7 @@ export default {
   private: {
     currentTime: "",
     themeColor: preferences.getCachedThemeColor(),
+    hideRemark: false,
     remainingMinutes: 0,
     upcomingMinutes: 0,
     showUpcomingReminder: false,
@@ -126,6 +133,7 @@ export default {
   loadPreference() {
     preferences.getPreferences((pref) => {
       this.themeColor = pref.themeColor
+      this.hideRemark = pref.hideRemark === true
     })
   },
 
@@ -136,7 +144,7 @@ export default {
     return (course.name || "") + "|" + (course.timeText || "")
   },
 
-  // 上课时底部显示下一节课课程名和教室
+  // 上课时底部显示下一节课课程名和地点
   calculateNextCourse() {
     let next = null
     if (this.course.isOngoing && this.course.range) {
@@ -335,6 +343,21 @@ export default {
   text-align: center;
 }
 
+.remark-section {
+  flex-direction: column;
+  width: 100%;
+  align-items: center;
+  padding-top: 24px;
+}
+
+.remark-text {
+  color: #cccccc;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 30px;
+  text-align: center;
+}
+
 .remaining-time {
   color: #237bff;
   font-size: 23px;
@@ -378,6 +401,11 @@ export default {
 
   .next-course-meta {
     font-size: 24px;
+  }
+
+  .remark-text {
+    font-size: 24px;
+    line-height: 32px;
   }
 }
 </style>

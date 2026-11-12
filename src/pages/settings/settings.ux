@@ -13,16 +13,6 @@
     </div>
 
     <scroll class="settings-list" scroll-y="true" bounces="true">
-      <div class="settings-item{{ semesterStartDate ? ' settings-item-value' : '' }}" onclick="openDatePicker">
-        <text class="item-text">开学日期</text>
-        <text class="item-subtext" if="{{ semesterStartDate }}">{{ semesterStartDate }}</text>
-      </div>
-      <div class="settings-item{{ semesterTotalWeeks ? ' settings-item-value' : '' }}" onclick="openWeekPicker">
-        <text class="item-text">学期周数</text>
-        <text class="item-subtext" if="{{ semesterTotalWeeks }}">
-          {{ semesterTotalWeeks }} 周
-        </text>
-      </div>
       <div class="settings-item" onclick="openPersonalize">
         <text class="item-text">个性化</text>
       </div>
@@ -49,8 +39,6 @@ const utils = require("../../common/utils.js")
 
 export default {
   private: {
-    semesterStartDate: "",
-    semesterTotalWeeks: "",
     clearConfirming: false,
     currentTime: "",
     timerId: 0
@@ -58,7 +46,6 @@ export default {
 
   onInit() {
     utils.startClock(this)
-    this.loadData()
   },
 
   onDestroy() {
@@ -75,38 +62,12 @@ export default {
 
   onShow() {
     utils.startClock(this)
-    this.loadData()
-  },
-
-  loadData() {
-    utils.readSchedule((data) => {
-      const config = data.config
-      // 有该字段时覆盖，无该字段时保留当前值
-      if ("semesterStartDate" in config) {
-        this.semesterStartDate = config.semesterStartDate || ""
-      }
-      if ("semesterTotalWeeks" in config) {
-        this.semesterTotalWeeks = config.semesterTotalWeeks || ""
-      }
-      this.clearConfirming = false
-    })
+    this.clearConfirming = false
   },
 
   openPersonalize() {
     router.push({
       uri: "/pages/personalize"
-    })
-  },
-
-  openDatePicker() {
-    router.push({
-      uri: "/pages/date-picker"
-    })
-  },
-
-  openWeekPicker() {
-    router.push({
-      uri: "/pages/week-picker"
     })
   },
 
@@ -125,8 +86,6 @@ export default {
       key: STORAGE_KEY,
       value: JSON.stringify(utils.createEmptySchedule()),
       success: () => {
-        this.semesterStartDate = ""
-        this.semesterTotalWeeks = ""
         this.clearConfirming = false
         // 清除成功后震动一次
         try {
@@ -234,21 +193,10 @@ export default {
   justify-content: center;
 }
 
-.settings-item-value {
-  height: 101px;
-}
-
 .item-text {
   color: #ffffff;
   font-size: 24px;
   font-weight: 800;
-}
-
-.item-subtext {
-  margin-top: 4px;
-  color: #aaaaaa;
-  font-size: 20px;
-  font-weight: 700;
 }
 
 .item-text-warn {
@@ -282,16 +230,8 @@ export default {
     height: 80px;
   }
 
-  .settings-item-value {
-    height: 95px;
-  }
-
   .item-text {
     font-size: 26px;
-  }
-
-  .item-subtext {
-    font-size: 24px;
   }
 }
 </style>
