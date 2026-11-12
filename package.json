@@ -1,8 +1,8 @@
 {
-  "name": "hyperschedule-for-vela",
+  "name": "hyperschedule-for-band",
   "version": "1.0.0",
   "private": true,
-  "description": "适用于 Vela 设备的课程表快应用",
+  "description": "HyperSchedule 手环端快应用",
   "engines": {
     "node": ">=16.0.0"
   },
