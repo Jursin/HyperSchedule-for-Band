@@ -7,8 +7,20 @@ const STORAGE_KEY = "schedule_data"
 const DEFAULT_MORNING_SPLIT = "12:00"
 const DEFAULT_EVENING_SPLIT = "18:00"
 
+// 课前倒计时提前量默认值，课表未下发时使用
+const DEFAULT_PRE_CLASS_MINUTES = 10
+
 function formatTime(date) {
   return pad2(date.getHours()) + ":" + pad2(date.getMinutes())
+}
+
+// 提前量按整数分钟取，非法值回落默认值，0 表示不显示倒计时
+function normalizePreClassMinutes(value) {
+  const minutes = parseInt(value, 10)
+  if (Number.isNaN(minutes) || minutes < 0 || minutes > 24 * 60) {
+    return DEFAULT_PRE_CLASS_MINUTES
+  }
+  return minutes
 }
 
 function createEmptySchedule() {
@@ -19,7 +31,8 @@ function createEmptySchedule() {
       semesterStartDate: "",
       semesterTotalWeeks: "",
       morningAfternoonSplit: DEFAULT_MORNING_SPLIT,
-      afternoonEveningSplit: DEFAULT_EVENING_SPLIT
+      afternoonEveningSplit: DEFAULT_EVENING_SPLIT,
+      preClassMinutes: DEFAULT_PRE_CLASS_MINUTES
     }
   }
 }
@@ -30,7 +43,8 @@ function normalizeConfig(raw) {
     semesterStartDate: config.semesterStartDate || "",
     semesterTotalWeeks: config.semesterTotalWeeks || "",
     morningAfternoonSplit: config.morningAfternoonSplit || DEFAULT_MORNING_SPLIT,
-    afternoonEveningSplit: config.afternoonEveningSplit || DEFAULT_EVENING_SPLIT
+    afternoonEveningSplit: config.afternoonEveningSplit || DEFAULT_EVENING_SPLIT,
+    preClassMinutes: normalizePreClassMinutes(config.preClassMinutes)
   }
 }
 
@@ -168,6 +182,7 @@ module.exports = {
   minutesOfDay,
   createEmptySchedule,
   normalizeConfig,
+  normalizePreClassMinutes,
   periodSplits,
   normalizeScheduleData,
   readSchedule,

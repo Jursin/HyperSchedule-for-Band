@@ -49,6 +49,7 @@
     "semesterStartDate": "2026-03-02",
     "semesterTotalWeeks": 18,
     "morningAfternoonSplit": "12:00",
-    "afternoonEveningSplit": "18:00"
+    "afternoonEveningSplit": "18:00",
+    "preClassMinutes": 10
   }
 }

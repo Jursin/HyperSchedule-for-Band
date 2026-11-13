@@ -80,10 +80,7 @@
         </block>
       </scroll>
 
-      <div
-        class="state-wrap"
-        if="{{ configMissing || notStarted || !hasCourses }}"
-      >
+      <div class="state-wrap" if="{{ configMissing || notStarted || !hasCourses }}">
         <image class="empty-icon" src="/common/rest.png"></image>
         <text class="empty-text">
           {{
@@ -112,6 +109,9 @@ const preferences = require("../../common/preferences.js")
 const utils = require("../../common/utils.js")
 // 左右切换日期的上限
 const DAY_OFFSET_MAX = 180
+
+// 时段分隔初始值，加载课表后按推送配置覆盖
+const DEFAULT_SPLITS = utils.periodSplits()
 
 function formatDate(date) {
   const y = date.getFullYear()
@@ -267,8 +267,8 @@ export default {
     notStarted: false,
     semesterEnded: false,
     configMissing: false,
-    morningSplit: 12 * 60,
-    eveningSplit: 18 * 60,
+    morningSplit: DEFAULT_SPLITS.morning,
+    eveningSplit: DEFAULT_SPLITS.evening,
     currentWeek: 0,
     currentWeekText: "-",
     hideTeacher: false,
@@ -479,12 +479,13 @@ export default {
   },
 
   openCourseDetail(course) {
-    // 跳转课程详情页时，传递当天全部课程
+    // 跳转课程详情页时，传递当天全部课程与课前倒计时提前量
     router.push({
       uri: "/pages/detail",
       params: {
         course: course,
-        todayCourses: JSON.stringify(this.displayCourses)
+        todayCourses: JSON.stringify(this.displayCourses),
+        preClassMinutes: this.scheduleData.config.preClassMinutes
       }
     })
   }

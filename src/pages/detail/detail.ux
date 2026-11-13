@@ -16,7 +16,7 @@
           style="color: {{ themeColor }}"
           if="{{ showUpcomingReminder }}"
         >
-          还剩{{ upcomingMinutes }}分钟上课
+          {{ upcomingText }}上课
         </text>
         <progress
           class="course-progress"
@@ -26,7 +26,7 @@
           type="horizontal"
         ></progress>
         <text class="remaining-time" style="color: {{ themeColor }}" if="{{ course.isOngoing }}">
-          还剩{{ remainingMinutes }}分钟下课
+          {{ remainingText }}下课
         </text>
         <progress
           class="course-progress"
@@ -54,8 +54,18 @@
 const preferences = require("../../common/preferences.js")
 const utils = require("../../common/utils.js")
 
-// 仅在上课前 30 分钟内显示倒计时
-const UPCOMING_REMINDER_MINUTES = 30
+// 剩余时长按分钟向上取整，不足一分钟也显示 1，满一小时才带小时
+function remainingLabel(remainingSeconds) {
+  const minutes = Math.max(Math.ceil(remainingSeconds / 60), 1)
+  const hours = Math.floor(minutes / 60)
+  if (hours === 0) {
+    return "还剩" + minutes + "分钟"
+  }
+  if (minutes % 60 === 0) {
+    return "还剩" + hours + "小时"
+  }
+  return "还剩" + hours + "小时" + (minutes % 60) + "分钟"
+}
 
 export default {
   protected: {
@@ -69,15 +79,17 @@ export default {
       isOngoing: false,
       progressPercent: 0
     },
-    todayCourses: []
+    todayCourses: [],
+    preClassMinutes: ""
   },
 
   private: {
     currentTime: "",
     themeColor: preferences.getCachedThemeColor(),
     hideRemark: false,
-    remainingMinutes: 0,
-    upcomingMinutes: 0,
+    remainingText: "",
+    upcomingText: "",
+    upcomingWindowMinutes: 0,
     showUpcomingReminder: false,
     upcomingProgressPercent: 0,
     nextCourse: {
@@ -100,6 +112,7 @@ export default {
     } catch (e) {
       console.error("Failed to parse params:", e)
     }
+    this.upcomingWindowMinutes = utils.normalizePreClassMinutes(this.preClassMinutes)
     this.initTodayCourseIndex()
     this.calculateRemainingTime()
     this.calculateUpcomingReminder()
@@ -208,14 +221,14 @@ export default {
     if (totalCurrentSeconds < totalStartSeconds) {
       this.course.isOngoing = false
       this.course.progressPercent = 0
-      this.remainingMinutes = 0
+      this.remainingText = ""
       return
     }
 
     // 已过下课时间
     const remainingSeconds = totalEndSeconds - totalCurrentSeconds
     if (remainingSeconds <= 0) {
-      this.remainingMinutes = 0
+      this.remainingText = ""
       this.course.isOngoing = false
       this.course.progressPercent = 100
       return
@@ -223,7 +236,7 @@ export default {
 
     // 正在上课中
     this.course.isOngoing = true
-    this.remainingMinutes = Math.ceil(remainingSeconds / 60)
+    this.remainingText = remainingLabel(remainingSeconds)
     const durationSeconds = totalEndSeconds - totalStartSeconds
     if (durationSeconds > 0) {
       this.course.progressPercent = Math.floor(
@@ -232,10 +245,11 @@ export default {
     }
   },
 
-  // 上课提醒和进度条：仅在本节课开课前 30 分钟内显示
+  // 上课提醒和进度条：仅在本节课开课前的提前量窗口内显示，提前量为 0 时不显示
   calculateUpcomingReminder() {
     const range = this.course.range
-    if (!range) {
+    const windowMinutes = this.upcomingWindowMinutes
+    if (!range || windowMinutes <= 0) {
       this.showUpcomingReminder = false
       return
     }
@@ -247,19 +261,23 @@ export default {
         continue
       }
       const prevRange = i > 0 ? this.sortedTodayCourses[i - 1].range : null
-      const prevEnd = prevRange ? prevRange.end : range.start - UPCOMING_REMINDER_MINUTES
-      from = Math.max(prevEnd, range.start - UPCOMING_REMINDER_MINUTES)
+      const prevEnd = prevRange ? prevRange.end : range.start - windowMinutes
+      from = Math.max(prevEnd, range.start - windowMinutes)
       break
     }
-    const currentMinutes = utils.minutesOfDay()
+    const now = new Date()
+    const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+    const currentMinutes = Math.floor(currentSeconds / 60)
     const show = from >= 0 && currentMinutes >= from && currentMinutes < range.start
     this.showUpcomingReminder = show
     if (!show) {
       return
     }
-    this.upcomingMinutes = range.start - currentMinutes
+    const startSeconds = range.start * 60
+    const fromSeconds = from * 60
+    this.upcomingText = remainingLabel(startSeconds - currentSeconds)
     this.upcomingProgressPercent = Math.floor(
-      ((currentMinutes - from) * 100) / (range.start - from)
+      ((currentSeconds - fromSeconds) * 100) / (startSeconds - fromSeconds)
     )
   }
 }
