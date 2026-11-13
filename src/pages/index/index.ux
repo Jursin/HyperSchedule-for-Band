@@ -357,6 +357,11 @@ export default {
   loadSchedule() {
     // 先加载偏好设置，再加载课表，避免首屏闪现老师名
     this.loadPreferences(() => {
+      // 开发/调试时使用本地示例课表，生产版本走本地存储
+      if (process.env.NODE_ENV !== "production") {
+        this.applySchedule(require("../../../examples/example-schedule.json"))
+        return
+      }
       utils.readSchedule((data) => this.applySchedule(data))
     })
   },

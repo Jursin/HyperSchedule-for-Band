@@ -17,14 +17,10 @@ HyperSchedule 手环端快应用，适用于 Xiaomi Vela OS
 - 支持多种预设主题色
 
 ## 🖼️ 预览图
-### Xiaomi-Band
-![](docs/images/Xiaomi-Band.png)
 
-### Xiaomi-Band-10
-![](docs/images/Xiaomi-Band-10.png)
-
-### Xiaomi-Band-Pro
-![](docs/images/Xiaomi-Band-Pro.png)
+| Xiaomi-Band | Xiaomi-Band-Pro |
+| - | - |
+| ![](docs/images/Xiaomi-Band.png) | ![](docs/images/Xiaomi-Band-Pro.png) |
 
 ## 📥 安装方式
 

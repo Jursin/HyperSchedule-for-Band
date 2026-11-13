@@ -1,53 +1,93 @@
 {
   "courses": [
     {
-      "name": "课程一",
-      "teacher": "",
-      "position": "",
+      "name": "高等数学",
       "day": 1,
+      "isCustomTime": false,
+      "teacher": "张老师",
+      "position": "教学楼A101",
+      "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
       "startSection": 1,
-      "endSection": 1,
-      "weekType": "all"
+      "endSection": 2
     },
     {
-      "name": "课程二",
-      "teacher": "",
-      "position": "",
+      "name": "大学物理",
       "day": 2,
-      "startSection": 2,
-      "endSection": 2,
-      "weekType": "all"
+      "isCustomTime": false,
+      "teacher": "李老师",
+      "position": "教学楼B202",
+      "weeks": [1, 3, 5, 7, 9, 11, 13, 15, 17, 19],
+      "startSection": 3,
+      "endSection": 4
     },
     {
-      "name": "课程三",
-      "teacher": "",
-      "position": "",
+      "name": "大学英语",
       "day": 3,
-      "startSection": 3,
-      "endSection": 3,
-      "weekType": "all"
+      "isCustomTime": false,
+      "teacher": "王老师",
+      "position": "教学楼C303",
+      "remark": "口语考试",
+      "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+      "startSection": 5,
+      "endSection": 5
+    },
+    {
+      "name": "大学物理实验",
+      "day": 4,
+      "isCustomTime": true,
+      "teacher": "赵老师",
+      "position": "实验楼D404",
+      "remark": "带实验报告",
+      "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20],
+      "customStartTime": "14:00",
+      "customEndTime": "16:00"
     }
   ],
   "timeSlots": [
     {
       "number": 1,
       "startTime": "08:00",
-      "endTime": "08:40"
+      "endTime": "08:45"
     },
     {
       "number": 2,
       "startTime": "08:50",
-      "endTime": "09:30"
+      "endTime": "09:35"
     },
     {
       "number": 3,
-      "startTime": "10:00",
-      "endTime": "10:40"
+      "startTime": "10:05",
+      "endTime": "10:50"
+    },
+    {
+      "number": 4,
+      "startTime": "10:55",
+      "endTime": "11:40"
+    },
+    {
+      "number": 5,
+      "startTime": "14:00",
+      "endTime": "14:45"
+    },
+    {
+      "number": 6,
+      "startTime": "14:50",
+      "endTime": "15:35"
+    },
+    {
+      "number": 7,
+      "startTime": "16:05",
+      "endTime": "16:50"
+    },
+    {
+      "number": 8,
+      "startTime": "16:55",
+      "endTime": "17:40"
     }
   ],
   "config": {
-    "semesterStartDate": "2026-03-02",
-    "semesterTotalWeeks": 18,
+    "semesterStartDate": "2026-09-07",
+    "semesterTotalWeeks": 20,
     "morningAfternoonSplit": "12:00",
     "afternoonEveningSplit": "18:00",
     "preClassMinutes": 10
