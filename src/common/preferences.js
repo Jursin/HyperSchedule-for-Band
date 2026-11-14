@@ -1,7 +1,8 @@
 const storage = require("@system.storage")
+const colors = require("./colors.js")
 
 const PREFERENCE_KEY = "app_preferences"
-const DEFAULT_COLOR = "#237bff"
+const DEFAULT_COLOR = colors.DEFAULT_COLOR
 
 const DEFAULT_PREFERENCES = {
   themeColor: DEFAULT_COLOR,
@@ -28,26 +29,9 @@ function parsePreferences(raw) {
   if (!("hideRemark" in pref) && typeof pref.showRemark === "boolean") {
     merged.hideRemark = !pref.showRemark
   }
+  // 迁移完就把旧键丢掉，避免一直留在存储里
+  delete merged.showRemark
   return merged
-}
-
-// 应用启动时调用，预载偏好到内存缓存
-function init(callback) {
-  storage.get({
-    key: PREFERENCE_KEY,
-    success: (raw) => {
-      cachedPrefs = parsePreferences(raw)
-      if (callback) {
-        callback(cachedPrefs)
-      }
-    },
-    fail: () => {
-      cachedPrefs = Object.assign({}, DEFAULT_PREFERENCES)
-      if (callback) {
-        callback(cachedPrefs)
-      }
-    }
-  })
 }
 
 // 同步返回缓存的主题色，缓存未就绪时回退默认色
@@ -57,16 +41,16 @@ function getCachedThemeColor() {
 
 // 读取偏好，回调返回 { themeColor, hideTeacher, centerHomeText, prefixAtSymbol, hideRemark }
 function getPreferences(callback) {
+  const done = (pref) => {
+    cachedPrefs = pref
+    if (callback) {
+      callback(pref)
+    }
+  }
   storage.get({
     key: PREFERENCE_KEY,
-    success: (raw) => {
-      cachedPrefs = parsePreferences(raw)
-      callback(cachedPrefs)
-    },
-    fail: () => {
-      cachedPrefs = Object.assign({}, DEFAULT_PREFERENCES)
-      callback(cachedPrefs)
-    }
+    success: (raw) => done(parsePreferences(raw)),
+    fail: () => done(Object.assign({}, DEFAULT_PREFERENCES))
   })
 }
 
@@ -103,7 +87,5 @@ function setPreferences(patch, callback) {
 module.exports = {
   getPreferences,
   setPreferences,
-  init,
-  getCachedThemeColor,
-  DEFAULT_COLOR
+  getCachedThemeColor
 }

@@ -5,6 +5,7 @@
     "vela.aiot-emulator",
     "vela.aiot-manifest-visualization",
     "vela.aiot-project",
-    "vela.aiot-ux"
+    "vela.aiot-ux",
+    "stylelint.vscode-stylelint"
   ]
 }

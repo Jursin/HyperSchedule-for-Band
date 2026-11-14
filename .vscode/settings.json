@@ -1,3 +1,4 @@
 {
-  "aiot.core.autoWriteMcpConfig": false
+  "aiot.core.autoWriteMcpConfig": false,
+  "stylelint.validate": ["css", "ux"]
 }

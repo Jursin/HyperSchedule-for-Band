@@ -80,7 +80,8 @@ export default {
       progressPercent: 0
     },
     todayCourses: [],
-    preClassMinutes: ""
+    preClassMinutes: "",
+    dayOffset: 0
   },
 
   private: {
@@ -113,6 +114,8 @@ export default {
       console.error("Failed to parse params:", e)
     }
     this.upcomingWindowMinutes = utils.normalizePreClassMinutes(this.preClassMinutes)
+    const offset = Number(this.dayOffset)
+    this.dayOffset = Number.isNaN(offset) ? 0 : offset
     this.initTodayCourseIndex()
     this.calculateRemainingTime()
     this.calculateUpcomingReminder()
@@ -127,9 +130,7 @@ export default {
       this.updateCurrentTime()
       this.calculateRemainingTime()
       this.calculateUpcomingReminder()
-      if (this.course.isOngoing) {
-        this.calculateNextCourse()
-      }
+      this.calculateNextCourse()
     }, 1000)
   },
 
@@ -148,13 +149,6 @@ export default {
       this.themeColor = pref.themeColor
       this.hideRemark = pref.hideRemark === true
     })
-  },
-
-  courseMatchKey(course) {
-    if (!course || typeof course !== "object") {
-      return ""
-    }
-    return (course.name || "") + "|" + (course.timeText || "")
   },
 
   // 上课时底部显示下一节课课程名和地点
@@ -211,6 +205,12 @@ export default {
   calculateRemainingTime() {
     const range = this.course.range
     if (!range) return
+    if (this.dayOffset !== 0) {
+      this.course.isOngoing = false
+      this.course.progressPercent = 0
+      this.remainingText = ""
+      return
+    }
 
     const now = new Date()
     const totalStartSeconds = range.start * 60
@@ -249,22 +249,11 @@ export default {
   calculateUpcomingReminder() {
     const range = this.course.range
     const windowMinutes = this.upcomingWindowMinutes
-    if (!range || windowMinutes <= 0) {
+    if (!range || windowMinutes <= 0 || this.dayOffset !== 0) {
       this.showUpcomingReminder = false
       return
     }
-    const key = this.courseMatchKey(this.course)
-    let from = -1
-    for (let i = 0; i < this.sortedTodayCourses.length; i += 1) {
-      const item = this.sortedTodayCourses[i]
-      if (!item.range || this.courseMatchKey(item) !== key) {
-        continue
-      }
-      const prevRange = i > 0 ? this.sortedTodayCourses[i - 1].range : null
-      const prevEnd = prevRange ? prevRange.end : range.start - windowMinutes
-      from = Math.max(prevEnd, range.start - windowMinutes)
-      break
-    }
+    const from = range.start - windowMinutes
     const now = new Date()
     const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
     const currentMinutes = Math.floor(currentSeconds / 60)
@@ -377,7 +366,6 @@ export default {
 }
 
 .remaining-time {
-  color: #237bff;
   font-size: 23px;
   font-weight: 700;
   margin: 14px 0;
@@ -388,7 +376,6 @@ export default {
   width: 100%;
   margin-top: 10px;
   stroke-width: 10px;
-  color: #237bff;
   layer-color: rgba(255, 255, 255, 0.2);
 }
 

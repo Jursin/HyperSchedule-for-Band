@@ -30,11 +30,8 @@
 
 <script>
 import router from "@system.router"
-import storage from "@system.storage"
-import prompt from "@system.prompt"
 import vibrator from "@system.vibrator"
 
-const STORAGE_KEY = "schedule_data"
 const utils = require("../../common/utils.js")
 
 export default {
@@ -82,29 +79,19 @@ export default {
       this.clearConfirming = true
       return
     }
-    storage.set({
-      key: STORAGE_KEY,
-      value: JSON.stringify(utils.createEmptySchedule()),
-      success: () => {
-        this.clearConfirming = false
-        // 清除成功后震动一次
-        try {
-          vibrator.vibrate({mode: "short"})
-        } catch (e) {
-          // 震动失败可忽略
-        }
-        prompt.showToast({
-          message: "已清除配置",
-          duration: 1200
-        })
-      },
-      fail: () => {
-        this.clearConfirming = false
-        prompt.showToast({
-          message: "清除失败",
-          duration: 2000
-        })
+    utils.clearSchedule((ok) => {
+      this.clearConfirming = false
+      if (!ok) {
+        utils.showToast("清除失败")
+        return
       }
+      // 清除成功后震动一次
+      try {
+        vibrator.vibrate({mode: "short"})
+      } catch (e) {
+        // 震动失败可忽略
+      }
+      utils.showToast("已清除配置")
     })
   }
 }

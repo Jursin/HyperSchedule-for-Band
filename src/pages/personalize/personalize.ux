@@ -59,26 +59,17 @@
 
 <script>
 import router from "@system.router"
-import prompt from "@system.prompt"
 
 const preferences = require("../../common/preferences.js")
 const utils = require("../../common/utils.js")
-
-const COLOR_NAMES = {
-  "#237bff": "深空蓝",
-  "#06b6d4": "冰川青",
-  "#8b5cf6": "极光紫",
-  "#ec4899": "樱花粉",
-  "#15803d": "森林绿",
-  "#e0a422": "琥珀黄"
-}
+const colors = require("../../common/colors.js")
 
 export default {
   private: {
     hideTeacher: false,
     hideRemark: false,
     themeColor: preferences.getCachedThemeColor(),
-    themeColorName: "",
+    themeColorName: colors.colorName(preferences.getCachedThemeColor()),
     centerHomeText: false,
     prefixAtSymbol: false,
     currentTime: "",
@@ -114,17 +105,14 @@ export default {
       this.centerHomeText = !!pref.centerHomeText
       this.prefixAtSymbol = !!pref.prefixAtSymbol
       this.themeColor = pref.themeColor
-      this.themeColorName = COLOR_NAMES[pref.themeColor] || COLOR_NAMES[preferences.DEFAULT_COLOR]
+      this.themeColorName = colors.colorName(pref.themeColor)
     })
   },
 
   savePreferences(patch) {
     preferences.setPreferences(patch, (ok) => {
       if (!ok) {
-        prompt.showToast({
-          message: "保存失败",
-          duration: 2000
-        })
+        utils.showToast("保存失败")
       }
     })
   },

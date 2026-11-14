@@ -41,9 +41,10 @@ HyperSchedule 手环端快应用，适用于 Xiaomi Vela OS
   ```
 - 代码检查与格式化
   ```
-  npm run lint   # eslint 检查并自动修复
-  npm run format # prettier 一键格式化
-  npm run check  # prettier 格式检查
+  npm run lint       # eslint 检查并自动修复
+  npm run lint:style # stylelint 检查样式文件
+  npm run format     # prettier 一键格式化
+  npm run check      # prettier 格式检查 + stylelint
   ```
 - 调试
   ```

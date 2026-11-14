@@ -32,23 +32,14 @@
 
 <script>
 import router from "@system.router"
-import prompt from "@system.prompt"
 
 const preferences = require("../../common/preferences.js")
 const utils = require("../../common/utils.js")
-
-const COLOR_OPTIONS = [
-  {name: "深空蓝", value: "#237bff"},
-  {name: "冰川青", value: "#06b6d4"},
-  {name: "极光紫", value: "#8b5cf6"},
-  {name: "樱花粉", value: "#ec4899"},
-  {name: "森林绿", value: "#15803d"},
-  {name: "琥珀黄", value: "#e0a422"}
-]
+const colors = require("../../common/colors.js")
 
 export default {
   private: {
-    colorOptions: COLOR_OPTIONS,
+    colorOptions: colors.COLOR_OPTIONS,
     selectedColor: preferences.getCachedThemeColor(),
     currentTime: "",
     timerId: 0
@@ -91,10 +82,7 @@ export default {
       if (ok) {
         router.back()
       } else {
-        prompt.showToast({
-          message: "保存失败",
-          duration: 2000
-        })
+        utils.showToast("保存失败")
       }
     })
   }

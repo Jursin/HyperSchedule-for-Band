@@ -1,17 +1,15 @@
 <script>
-import storage from "@system.storage"
 import interconnect from "@system.interconnect"
 
 const preferences = require("./common/preferences.js")
 const utils = require("./common/utils.js")
 
-const STORAGE_KEY = "schedule_data"
 const conn = interconnect.instance()
 
 export default {
   onCreate() {
     // 启动时预载偏好，避免页面首帧显示默认主题色
-    preferences.init()
+    preferences.getPreferences()
     // 消息统一在这里接收，页面销毁或还没初始化时也不会丢
     conn.onmessage = (event) => this.onScheduleMessage(event)
   },
@@ -31,19 +29,17 @@ export default {
   },
 
   saveImported(imported) {
-    const schedule = utils.normalizeScheduleData(imported)
-    storage.set({
-      key: STORAGE_KEY,
-      value: JSON.stringify(schedule),
-      success: () => {
-        utils.showToast("已导入 " + schedule.courses.length + " 门课程")
-        // 首页在 onInit 里注册，用来即时刷新界面
-        const handler = this.$def && this.$def.onScheduleImported
-        if (typeof handler === "function") {
-          handler(schedule)
-        }
-      },
-      fail: () => utils.showToast("导入失败，保存异常")
+    utils.saveSchedule(imported, (ok, schedule) => {
+      if (!ok) {
+        utils.showToast("导入失败，保存异常")
+        return
+      }
+      utils.showToast("已导入 " + schedule.courses.length + " 门课程")
+      // 首页在 onInit 里注册，用来即时刷新界面
+      const handler = this.$def && this.$def.onScheduleImported
+      if (typeof handler === "function") {
+        handler(schedule)
+      }
     })
   }
 }

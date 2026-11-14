@@ -136,7 +136,12 @@ function weekFromStart(startDate, targetDate) {
     return 0
   }
   const target = mondayOf(targetDate instanceof Date ? targetDate : new Date())
-  const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000)
+  // 按日历天算，绕开夏令时导致的 23 / 25 小时日
+  const diffDays = Math.round(
+    (Date.UTC(target.getFullYear(), target.getMonth(), target.getDate()) -
+      Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) /
+      86400000
+  )
   if (diffDays < 0) {
     return -1
   }
@@ -484,13 +489,14 @@ export default {
   },
 
   openCourseDetail(course) {
-    // 跳转课程详情页时，传递当天全部课程与课前倒计时提前量
+    // 跳转课程详情页时，传递当天全部课程、课前倒计时提前量与所在天偏移
     router.push({
       uri: "/pages/detail",
       params: {
         course: course,
         todayCourses: JSON.stringify(this.displayCourses),
-        preClassMinutes: this.scheduleData.config.preClassMinutes
+        preClassMinutes: this.scheduleData.config.preClassMinutes,
+        dayOffset: this.selectedOffsetDays
       }
     })
   }

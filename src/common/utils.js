@@ -66,7 +66,9 @@ function normalizeScheduleData(data) {
     courses: Array.isArray(data.courses)
       ? data.courses.filter((item) => item && typeof item === "object")
       : [],
-    timeSlots: Array.isArray(data.timeSlots) ? data.timeSlots : [],
+    timeSlots: Array.isArray(data.timeSlots)
+      ? data.timeSlots.filter((item) => item && typeof item === "object")
+      : [],
     config: normalizeConfig(data.config)
   }
 }
@@ -86,6 +88,29 @@ function readSchedule(callback) {
     },
     fail: () => callback(createEmptySchedule())
   })
+}
+
+// 归一化后写入本地课表，回调第二个参数是实际落盘的课表
+function saveSchedule(data, callback) {
+  const schedule = normalizeScheduleData(data)
+  storage.set({
+    key: STORAGE_KEY,
+    value: JSON.stringify(schedule),
+    success: () => {
+      if (callback) {
+        callback(true, schedule)
+      }
+    },
+    fail: () => {
+      if (callback) {
+        callback(false, schedule)
+      }
+    }
+  })
+}
+
+function clearSchedule(callback) {
+  saveSchedule(createEmptySchedule(), callback)
 }
 
 // 缺字段直接拒绝
@@ -148,49 +173,19 @@ function pad2(value) {
   return (value + "").padStart(2, "0")
 }
 
-function getPickerIndex(event, options, fallbackIndex) {
-  var raw = event && (event.newValue !== undefined ? event.newValue : event.value)
-  if (raw === undefined || raw === null || raw === "") {
-    return fallbackIndex >= 0 ? fallbackIndex : 0
-  }
-  var text = raw + ""
-  var directIndex = Array.isArray(options) ? options.indexOf(text) : -1
-  if (directIndex >= 0) {
-    return directIndex
-  }
-  var numeric = parseInt(text, 10)
-  if (!Number.isNaN(numeric)) {
-    if (numeric >= 0 && Array.isArray(options) && numeric < options.length) {
-      return numeric
-    }
-    if (Array.isArray(options)) {
-      var plainValueIndex = options.indexOf(numeric + "")
-      if (plainValueIndex >= 0) {
-        return plainValueIndex
-      }
-      var paddedValueIndex = options.indexOf(pad2(numeric))
-      if (paddedValueIndex >= 0) {
-        return paddedValueIndex
-      }
-    }
-  }
-  return fallbackIndex >= 0 ? fallbackIndex : 0
-}
-
 module.exports = {
-  formatTime,
   minutesOfDay,
   createEmptySchedule,
-  normalizeConfig,
   normalizePreClassMinutes,
   periodSplits,
   normalizeScheduleData,
   readSchedule,
+  saveSchedule,
+  clearSchedule,
   tryExtractSchedule,
   showToast,
   timeToMinutes,
   startClock,
   stopClock,
-  pad2,
-  getPickerIndex
+  pad2
 }
