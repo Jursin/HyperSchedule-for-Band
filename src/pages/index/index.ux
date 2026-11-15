@@ -22,16 +22,23 @@
 
     <div class="course-content">
       <scroll
+        id="courseScroll"
         class="course-list-scroll"
         scroll-y="true"
         bounces="true"
+        onscroll="onCourseScroll"
         if="{{ !notStarted && hasCourses }}"
       >
         <block for="{{ group in courseGroups }}">
           <block if="{{ group.courses.length > 0 }}">
             <text class="section-title">{{ group.title }}</text>
             <block for="{{ course in group.courses }}">
-              <div class="course-row">
+              <div class="course-row" id="{{ course.rowId }}">
+                <div
+                  id="ongoingAnchor"
+                  class="course-anchor"
+                  if="{{ course.isOngoingAnchor }}"
+                ></div>
                 <div
                   class="course-card {{ centerHomeText ? 'course-card-centered' : '' }}"
                   style="{{ course.isOngoing ? 'background-color:' + themeColor : '' }}"
@@ -109,6 +116,11 @@ const preferences = require("../../common/preferences.js")
 const utils = require("../../common/utils.js")
 // 左右切换日期的上限
 const DAY_OFFSET_MAX = 180
+
+const ONGOING_STATIC_ANCHOR_ID = "ongoingAnchor"
+const ONGOING_ROW_ID = "ongoingCourseRow"
+const ONGOING_ANCHOR_MARGIN = 8
+const SCROLL_RESUME_DELAY = 50
 
 // 时段分隔初始值，加载课表后按推送配置覆盖
 const DEFAULT_SPLITS = utils.periodSplits()
@@ -284,17 +296,29 @@ export default {
     courseGroups: [],
     currentTime: "",
     todayDate: formatDate(new Date()),
-    timerId: 0
+    timerId: 0,
+    scrollY: 0,
+    scrollIntent: "",
+    restoreScrollTop: 0,
+    ongoingRowId: "",
+    hasShown: false,
+    leftByNavigation: false,
+    suspendScrollTracking: false,
+    scrollResumeTimer: 0,
+    scrollDecisionSeq: 0
   },
 
   onInit() {
     this.startTicking()
     this.bindImportRefresh()
-    this.loadSchedule()
   },
 
   onDestroy() {
     utils.stopClock(this)
+    if (this.scrollResumeTimer) {
+      clearTimeout(this.scrollResumeTimer)
+      this.scrollResumeTimer = 0
+    }
     this.$app.$def.onScheduleImported = null
   },
 
@@ -304,7 +328,35 @@ export default {
 
   onShow() {
     this.startTicking()
+    this.decideScrollOnShow()
     this.loadSchedule()
+  },
+
+  decideScrollOnShow() {
+    const memory = this.$app.$def.homeScrollRestore
+    this.$app.$def.homeScrollRestore = null
+    if (memory) {
+      this.scrollIntent = "restore"
+      this.restoreScrollTop = Number(memory.scrollTop) || 0
+    } else if (!this.hasShown || this.leftByNavigation) {
+      this.scrollIntent = "locate"
+    } else {
+      this.scrollIntent = "restore"
+      this.restoreScrollTop = this.scrollY
+    }
+    this.hasShown = true
+    this.leftByNavigation = false
+  },
+
+  onCourseScroll(event) {
+    if (this.suspendScrollTracking) {
+      return
+    }
+    const y = Number(event && event.scrollY)
+    if (Number.isNaN(y) || y < 0 || this.scrollY === y) {
+      return
+    }
+    this.scrollY = y
   },
 
   startTicking() {
@@ -314,6 +366,8 @@ export default {
   // 亮屏常看时也要让进度条动起来，跨天则整页重算
   onClockTick() {
     if (formatDate(new Date()) !== this.todayDate) {
+      this.scrollIntent = "restore"
+      this.restoreScrollTop = this.scrollY
       this.afterLoad()
       return
     }
@@ -342,10 +396,12 @@ export default {
 
   selectOffsetDays(offset) {
     this.selectedOffsetDays = Math.max(-DAY_OFFSET_MAX, Math.min(DAY_OFFSET_MAX, offset))
+    this.scrollIntent = "top"
     this.afterLoad()
   },
 
   openSettings() {
+    this.leftByNavigation = true
     router.push({
       uri: "/pages/settings"
     })
@@ -390,6 +446,11 @@ export default {
   },
 
   afterLoad() {
+    this.suspendScrollEvents()
+    if (this.scrollIntent === "locate") {
+      this.resetScrollBeforeRebuild()
+    }
+
     const config = this.scheduleData.config
     this.todayDate = formatDate(new Date())
     const selectedDate = addDays(new Date(), this.selectedOffsetDays)
@@ -407,6 +468,8 @@ export default {
       this.displayCourses = []
       this.courseGroups = []
       this.hasCourses = false
+      this.ongoingRowId = ""
+      this.applyScrollDecision()
       return
     }
     const splits = utils.periodSplits(config)
@@ -419,6 +482,7 @@ export default {
     this.semesterEnded = this.currentWeek > semesterTotalWeeks
     this.currentWeekText = this.notStarted ? "-" : String(this.currentWeek)
     this.refreshCourses()
+    this.applyScrollDecision()
   },
 
   refreshCourses() {
@@ -485,10 +549,148 @@ export default {
         groups[2].courses.push(target[i])
       }
     }
+    let hasOngoingAnchor = false
+    for (let g = 0; g < groups.length; g += 1) {
+      const rows = groups[g].courses
+      for (let i = 0; i < rows.length; i += 1) {
+        const isAnchor = !hasOngoingAnchor && rows[i].isOngoing
+        rows[i].rowId = isAnchor ? ONGOING_ROW_ID : "course-row-" + g + "-" + i
+        rows[i].isOngoingAnchor = isAnchor
+        if (isAnchor) {
+          hasOngoingAnchor = true
+        }
+      }
+    }
+    this.ongoingRowId = hasOngoingAnchor ? ONGOING_ROW_ID : ""
     this.courseGroups = groups
   },
 
+  suspendScrollEvents() {
+    this.suspendScrollTracking = true
+    if (this.scrollResumeTimer) {
+      clearTimeout(this.scrollResumeTimer)
+      this.scrollResumeTimer = 0
+    }
+  },
+
+  getCourseScroller() {
+    try {
+      const scroller = this.$element("courseScroll")
+      return scroller && typeof scroller.scrollTo === "function" ? scroller : null
+    } catch (err) {
+      return null
+    }
+  },
+
+  safeScrollTo(scroller, top) {
+    const value = Number(top)
+    const safeTop = Number.isNaN(value) || value < 0 ? 0 : value
+    scroller.scrollTo({top: safeTop, behavior: "instant"})
+    return safeTop
+  },
+
+  resetScrollBeforeRebuild() {
+    const scroller = this.getCourseScroller()
+    if (scroller) {
+      this.safeScrollTo(scroller, 0)
+    }
+  },
+
+  applyScrollDecision() {
+    const intent = this.scrollIntent || "restore"
+    const savedTop = this.scrollIntent === "restore" ? this.restoreScrollTop : this.scrollY
+    this.scrollIntent = ""
+    if (intent === "top") {
+      this.scrollY = 0
+    } else if (intent === "restore") {
+      this.scrollY = Math.max(0, savedTop)
+    }
+
+    this.scrollDecisionSeq += 1
+    const seq = this.scrollDecisionSeq
+
+    if (this.scrollResumeTimer) {
+      clearTimeout(this.scrollResumeTimer)
+    }
+    this.scrollResumeTimer = setTimeout(() => {
+      this.scrollResumeTimer = 0
+      this.suspendScrollTracking = false
+    }, SCROLL_RESUME_DELAY)
+
+    const run = (retried) => {
+      if (seq !== this.scrollDecisionSeq) {
+        return
+      }
+      const scroller = this.getCourseScroller()
+      if (!scroller) {
+        if (!retried) {
+          setTimeout(() => run(true), SCROLL_RESUME_DELAY)
+        }
+        return
+      }
+      if (intent === "locate") {
+        if (this.ongoingRowId) {
+          this.locateOngoing(scroller, seq)
+        } else {
+          this.scrollY = this.safeScrollTo(scroller, 0)
+        }
+        return
+      }
+      this.scrollY = this.safeScrollTo(scroller, intent === "top" ? 0 : savedTop)
+    }
+
+    if (typeof this.$nextTick === "function") {
+      this.$nextTick(run)
+    } else {
+      setTimeout(run, 0)
+    }
+  },
+
+  locateOngoing(scroller, seq) {
+    const finish = (top) => {
+      if (seq !== this.scrollDecisionSeq) {
+        return
+      }
+      this.scrollY = this.safeScrollTo(scroller, Math.max(0, top))
+    }
+    const ids = [ONGOING_STATIC_ANCHOR_ID, this.ongoingRowId]
+    let anchor = null
+    for (let i = 0; i < ids.length; i += 1) {
+      let node = null
+      try {
+        node = this.$element(ids[i])
+      } catch (err) {
+        node = null
+      }
+      if (node && typeof node.getBoundingClientRect === "function") {
+        anchor = node
+        break
+      }
+    }
+    if (!anchor || typeof scroller.getBoundingClientRect !== "function") {
+      finish(0)
+      return
+    }
+    try {
+      anchor.getBoundingClientRect({
+        success: (rect) => {
+          scroller.getBoundingClientRect({
+            success: (box) => {
+              finish(Math.max(0, rect.top - box.top - ONGOING_ANCHOR_MARGIN))
+            },
+            fail: () => finish(0)
+          })
+        },
+        fail: () => finish(0)
+      })
+    } catch (err) {
+      finish(0)
+    }
+  },
+
   openCourseDetail(course) {
+    this.leftByNavigation = true
+    this.$app.$def.homeScrollRestore = {scrollTop: this.scrollY}
     // 跳转课程详情页时，传递当天全部课程、课前倒计时提前量与所在天偏移
     router.push({
       uri: "/pages/detail",
@@ -604,6 +806,10 @@ export default {
   flex-direction: column;
   width: 100%;
   margin-bottom: 10px;
+}
+
+.course-anchor {
+  height: 1px;
 }
 
 .course-card {
