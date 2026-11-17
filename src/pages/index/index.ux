@@ -25,6 +25,7 @@
         id="courseScroll"
         class="course-list-scroll"
         scroll-y="true"
+        scroll-top="{{ scrollTop }}"
         bounces="true"
         onscroll="onCourseScroll"
         if="{{ !notStarted && hasCourses }}"
@@ -33,7 +34,7 @@
           <block if="{{ group.courses.length > 0 }}">
             <text class="section-title">{{ group.title }}</text>
             <block for="{{ course in group.courses }}">
-              <div class="course-row" id="{{ course.rowId }}">
+              <div class="course-row">
                 <div
                   id="ongoingAnchor"
                   class="course-anchor"
@@ -118,7 +119,6 @@ const utils = require("../../common/utils.js")
 const DAY_OFFSET_MAX = 180
 
 const ONGOING_STATIC_ANCHOR_ID = "ongoingAnchor"
-const ONGOING_ROW_ID = "ongoingCourseRow"
 const ONGOING_ANCHOR_MARGIN = 8
 const SCROLL_RESUME_DELAY = 50
 
@@ -236,10 +236,11 @@ function sectionTextOf(item) {
 }
 
 // 按当前时刻刷新「进行中」「已结束」与进度，值没变就不写
-function applyTimeState(course, minutes, dayOffset, themeColor, endedTimeColor) {
+function applyTimeState(course, minutes, dayOffset, preClassMinutes, themeColor, endedTimeColor) {
   const range = course.range
   const hasRange = !!range && range.end > range.start
   let ongoing = false
+  let upcoming = false
   let ended = false
   let percent = 0
   if (hasRange) {
@@ -248,6 +249,7 @@ function applyTimeState(course, minutes, dayOffset, themeColor, endedTimeColor) 
     } else if (dayOffset === 0) {
       ended = minutes >= range.end
       ongoing = minutes >= range.start && !ended
+      upcoming = !ongoing && minutes < range.start && range.start - minutes <= preClassMinutes
       if (minutes <= range.start) {
         percent = 0
       } else if (ended) {
@@ -259,6 +261,9 @@ function applyTimeState(course, minutes, dayOffset, themeColor, endedTimeColor) 
   }
   if (course.isOngoing !== ongoing) {
     course.isOngoing = ongoing
+  }
+  if (course.isUpcoming !== upcoming) {
+    course.isUpcoming = upcoming
   }
   if (course.isEnded !== ended) {
     course.isEnded = ended
@@ -297,10 +302,10 @@ export default {
     currentTime: "",
     todayDate: formatDate(new Date()),
     timerId: 0,
-    scrollY: 0,
+    scrollTop: 0,
     scrollIntent: "",
     restoreScrollTop: 0,
-    ongoingRowId: "",
+    hasOngoingAnchor: false,
     hasShown: false,
     leftByNavigation: false,
     suspendScrollTracking: false,
@@ -328,13 +333,18 @@ export default {
 
   onShow() {
     this.startTicking()
-    this.decideScrollOnShow()
-    this.loadSchedule()
+    if (this.decideScrollOnShow()) {
+      this.loadSchedule()
+    } else {
+      this.applyScrollDecision()
+    }
   },
 
   decideScrollOnShow() {
     const memory = this.$app.$def.homeScrollRestore
     this.$app.$def.homeScrollRestore = null
+    const shouldReload =
+      !this.hasShown || this.courseGroups.length === 0 || (memory && memory.reload !== false)
     if (memory) {
       this.scrollIntent = "restore"
       this.restoreScrollTop = Number(memory.scrollTop) || 0
@@ -342,21 +352,25 @@ export default {
       this.scrollIntent = "locate"
     } else {
       this.scrollIntent = "restore"
-      this.restoreScrollTop = this.scrollY
+      this.restoreScrollTop = this.scrollTop
+    }
+    if (this.scrollIntent === "restore") {
+      this.scrollTop = this.restoreScrollTop
     }
     this.hasShown = true
     this.leftByNavigation = false
+    return shouldReload
   },
 
   onCourseScroll(event) {
     if (this.suspendScrollTracking) {
       return
     }
-    const y = Number(event && event.scrollY)
-    if (Number.isNaN(y) || y < 0 || this.scrollY === y) {
+    const scrollTop = Number(event && event.scrollY)
+    if (Number.isNaN(scrollTop) || scrollTop < 0 || this.scrollTop === scrollTop) {
       return
     }
-    this.scrollY = y
+    this.scrollTop = scrollTop
   },
 
   startTicking() {
@@ -367,7 +381,7 @@ export default {
   onClockTick() {
     if (formatDate(new Date()) !== this.todayDate) {
       this.scrollIntent = "restore"
-      this.restoreScrollTop = this.scrollY
+      this.restoreScrollTop = this.scrollTop
       this.afterLoad()
       return
     }
@@ -376,8 +390,9 @@ export default {
     }
     const courses = this.displayCourses
     const minutes = utils.minutesOfDay()
+    const preClassMinutes = this.scheduleData.config.preClassMinutes
     for (let i = 0; i < courses.length; i += 1) {
-      applyTimeState(courses[i], minutes, 0, this.themeColor, this.endedTimeColor)
+      applyTimeState(courses[i], minutes, 0, preClassMinutes, this.themeColor, this.endedTimeColor)
     }
   },
 
@@ -402,6 +417,7 @@ export default {
 
   openSettings() {
     this.leftByNavigation = true
+    this.$app.$def.homeScrollRestore = {scrollTop: this.scrollTop, reload: false}
     router.push({
       uri: "/pages/settings"
     })
@@ -468,7 +484,7 @@ export default {
       this.displayCourses = []
       this.courseGroups = []
       this.hasCourses = false
-      this.ongoingRowId = ""
+      this.hasOngoingAnchor = false
       this.applyScrollDecision()
       return
     }
@@ -521,11 +537,19 @@ export default {
         // 详情页与排序、分组都用这份区间，不再反解析文本
         range: range,
         isOngoing: false,
+        isUpcoming: false,
         isEnded: false,
         timeColor: this.themeColor,
         progressPercent: 0
       }
-      applyTimeState(course, minutes, dayOffset, this.themeColor, this.endedTimeColor)
+      applyTimeState(
+        course,
+        minutes,
+        dayOffset,
+        this.scheduleData.config.preClassMinutes,
+        this.themeColor,
+        this.endedTimeColor
+      )
       target.push(course)
     }
 
@@ -539,6 +563,7 @@ export default {
       {title: "下午", courses: []},
       {title: "晚上", courses: []}
     ]
+    this.hasOngoingAnchor = false
     for (let i = 0; i < target.length; i += 1) {
       const start = target[i].range.start
       if (start < this.morningSplit) {
@@ -549,19 +574,16 @@ export default {
         groups[2].courses.push(target[i])
       }
     }
-    let hasOngoingAnchor = false
     for (let g = 0; g < groups.length; g += 1) {
       const rows = groups[g].courses
       for (let i = 0; i < rows.length; i += 1) {
-        const isAnchor = !hasOngoingAnchor && rows[i].isOngoing
-        rows[i].rowId = isAnchor ? ONGOING_ROW_ID : "course-row-" + g + "-" + i
-        rows[i].isOngoingAnchor = isAnchor
-        if (isAnchor) {
-          hasOngoingAnchor = true
+        rows[i].isOngoingAnchor =
+          !this.hasOngoingAnchor && (rows[i].isOngoing || rows[i].isUpcoming)
+        if (rows[i].isOngoingAnchor) {
+          this.hasOngoingAnchor = true
         }
       }
     }
-    this.ongoingRowId = hasOngoingAnchor ? ONGOING_ROW_ID : ""
     this.courseGroups = groups
   },
 
@@ -586,6 +608,7 @@ export default {
     const value = Number(top)
     const safeTop = Number.isNaN(value) || value < 0 ? 0 : value
     scroller.scrollTo({top: safeTop, behavior: "instant"})
+    this.scrollTop = safeTop
     return safeTop
   },
 
@@ -598,12 +621,12 @@ export default {
 
   applyScrollDecision() {
     const intent = this.scrollIntent || "restore"
-    const savedTop = this.scrollIntent === "restore" ? this.restoreScrollTop : this.scrollY
+    const savedTop = this.scrollIntent === "restore" ? this.restoreScrollTop : this.scrollTop
     this.scrollIntent = ""
     if (intent === "top") {
-      this.scrollY = 0
+      this.scrollTop = 0
     } else if (intent === "restore") {
-      this.scrollY = Math.max(0, savedTop)
+      this.scrollTop = Math.max(0, savedTop)
     }
 
     this.scrollDecisionSeq += 1
@@ -617,26 +640,23 @@ export default {
       this.suspendScrollTracking = false
     }, SCROLL_RESUME_DELAY)
 
-    const run = (retried) => {
+    const run = () => {
       if (seq !== this.scrollDecisionSeq) {
         return
       }
       const scroller = this.getCourseScroller()
       if (!scroller) {
-        if (!retried) {
-          setTimeout(() => run(true), SCROLL_RESUME_DELAY)
-        }
         return
       }
       if (intent === "locate") {
-        if (this.ongoingRowId) {
+        if (this.hasOngoingAnchor) {
           this.locateOngoing(scroller, seq)
         } else {
-          this.scrollY = this.safeScrollTo(scroller, 0)
+          this.safeScrollTo(scroller, 0)
         }
         return
       }
-      this.scrollY = this.safeScrollTo(scroller, intent === "top" ? 0 : savedTop)
+      this.safeScrollTo(scroller, intent === "top" ? 0 : savedTop)
     }
 
     if (typeof this.$nextTick === "function") {
@@ -651,21 +671,13 @@ export default {
       if (seq !== this.scrollDecisionSeq) {
         return
       }
-      this.scrollY = this.safeScrollTo(scroller, Math.max(0, top))
+      this.safeScrollTo(scroller, Math.max(0, top))
     }
-    const ids = [ONGOING_STATIC_ANCHOR_ID, this.ongoingRowId]
     let anchor = null
-    for (let i = 0; i < ids.length; i += 1) {
-      let node = null
-      try {
-        node = this.$element(ids[i])
-      } catch (err) {
-        node = null
-      }
-      if (node && typeof node.getBoundingClientRect === "function") {
-        anchor = node
-        break
-      }
+    try {
+      anchor = this.$element(ONGOING_STATIC_ANCHOR_ID)
+    } catch (err) {
+      anchor = null
     }
     if (!anchor || typeof scroller.getBoundingClientRect !== "function") {
       finish(0)
@@ -690,7 +702,7 @@ export default {
 
   openCourseDetail(course) {
     this.leftByNavigation = true
-    this.$app.$def.homeScrollRestore = {scrollTop: this.scrollY}
+    this.$app.$def.homeScrollRestore = {scrollTop: this.scrollTop, reload: false}
     // 跳转课程详情页时，传递当天全部课程、课前倒计时提前量与所在天偏移
     router.push({
       uri: "/pages/detail",
