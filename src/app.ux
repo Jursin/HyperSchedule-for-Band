@@ -1,23 +1,43 @@
 <script>
 import interconnect from "@system.interconnect"
+import device from "@system.device"
+import app from "@system.app"
 
 const preferences = require("./common/preferences.js")
 const utils = require("./common/utils.js")
 
 const conn = interconnect.instance()
 
+// 互联消息负载：字符串按 JSON 解析，对象直接用
+function parsePayload(raw) {
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw)
+    } catch (err) {
+      return null
+    }
+  }
+  return raw && typeof raw === "object" ? raw : null
+}
+
 export default {
   onCreate() {
     // 启动时预载偏好，避免页面首帧显示默认主题色
     preferences.getPreferences()
     // 消息统一在这里接收，页面销毁或还没初始化时也不会丢
-    conn.onmessage = (event) => this.onScheduleMessage(event)
+    conn.onmessage = (event) => this.onMessage(event)
   },
 
-  onScheduleMessage(event) {
+  onMessage(event) {
+    const payload = parsePayload(event && event.data)
+    // 手机查设备信息的回传，其余按课表导入处理
+    if (payload && payload.type === "query_device") {
+      this.replyDeviceInfo()
+      return
+    }
     let imported = null
     try {
-      imported = utils.tryExtractSchedule(event && event.data)
+      imported = utils.tryExtractSchedule(payload)
     } catch (err) {
       imported = null
     }
@@ -26,6 +46,29 @@ export default {
       return
     }
     this.saveImported(imported)
+  },
+
+  replyDeviceInfo() {
+    let appInfo = {}
+    try {
+      appInfo = app.getInfo() || {}
+    } catch (err) {
+      appInfo = {}
+    }
+    const send = (info) => {
+      const d = info || {}
+      conn.send({
+        data: {
+          type: "device_info",
+          deviceType: d.deviceType || "",
+          screenShape: d.screenShape || "",
+          versionName: appInfo.versionName || "",
+          versionCode: appInfo.versionCode || 0
+        },
+        fail: () => {}
+      })
+    }
+    device.getInfo({success: send, fail: () => send(null)})
   },
 
   saveImported(imported) {
