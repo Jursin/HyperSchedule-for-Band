@@ -42,7 +42,7 @@ export default {
       imported = null
     }
     if (!imported) {
-      utils.showToast("导入失败，数据格式不正确")
+      utils.showToast("导入失败：数据格式不正确")
       return
     }
     this.saveImported(imported)
@@ -74,10 +74,12 @@ export default {
   saveImported(imported) {
     utils.saveSchedule(imported, (ok, schedule) => {
       if (!ok) {
-        utils.showToast("导入失败，保存异常")
+        utils.showToast("导入失败：保存异常")
         return
       }
-      utils.showToast("已导入 " + schedule.courses.length + " 门课程")
+      const names = schedule.courses.map((item) => item.name)
+      const count = names.filter((name, index) => names.indexOf(name) === index).length
+      utils.showToast("已导入" + count + "门课程")
       // 首页在 onInit 里注册，用来即时刷新界面
       const handler = this.$def && this.$def.onScheduleImported
       if (typeof handler === "function") {
