@@ -24,7 +24,7 @@ HyperSchedule 手环端快应用，适用于 Xiaomi Vela OS
 
 ## 📥 安装方式
 
-[![astrobox](https://astrobox.online/goab/zhcn/black.svg)](https://astrobox.online/open?source=resv2&id=com.schedule.vela&provider=OfficialV2)
+[![astrobox](https://astrobox.online/goab/zhcn/black.svg)](https://astrobox.online/open?source=resv2&id=top.jursin.hyperschedule&provider=OfficialV2)
 
 > [!note]
 > 课表依赖 [Android 端应用](https://github.com/Jursin/HyperSchedule/releases/latest) 推送

@@ -1,8 +1,8 @@
 {
-  "package": "com.hyperschedule.app",
-  "name": "课程表",
-  "versionName": "2.1.0",
-  "versionCode": 15,
+  "package": "top.jursin.hyperschedule",
+  "name": "HyperSchedule",
+  "versionName": "2.1.1",
+  "versionCode": 16,
   "minPlatformVersion": 1000,
   "icon": "/common/logo.png",
   "deviceTypeList": ["watch"],
