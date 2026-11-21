@@ -84,8 +84,26 @@ function setPreferences(patch, callback) {
   })
 }
 
+// 清空应用存储并重置偏好状态
+function resetAllData(callback) {
+  storage.clear({
+    success: () => {
+      cachedPrefs = Object.assign({}, DEFAULT_PREFERENCES)
+      if (callback) {
+        callback(true)
+      }
+    },
+    fail: () => {
+      if (callback) {
+        callback(false)
+      }
+    }
+  })
+}
+
 module.exports = {
   getPreferences,
   setPreferences,
+  resetAllData,
   getCachedThemeColor
 }
