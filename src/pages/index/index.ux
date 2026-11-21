@@ -316,6 +316,7 @@ export default {
   onInit() {
     this.startTicking()
     this.bindImportRefresh()
+    this.bindPreferencesRefresh()
   },
 
   onDestroy() {
@@ -325,6 +326,7 @@ export default {
       this.scrollResumeTimer = 0
     }
     this.$app.$def.onScheduleImported = null
+    this.$app.$def.onPreferencesChanged = null
   },
 
   onHide() {
@@ -428,6 +430,36 @@ export default {
     this.$app.$def.onScheduleImported = (schedule) => {
       this.scheduleData = schedule
       this.selectOffsetDays(0)
+    }
+  },
+
+  bindPreferencesRefresh() {
+    this.$app.$def.onPreferencesChanged = (patch) => {
+      if (!patch || typeof patch !== "object") {
+        return
+      }
+      if (typeof patch.hideTeacher === "boolean") {
+        this.hideTeacher = patch.hideTeacher
+      }
+      if (typeof patch.centerHomeText === "boolean") {
+        this.centerHomeText = patch.centerHomeText
+      }
+      if (typeof patch.prefixAtSymbol === "boolean") {
+        this.prefixAtSymbol = patch.prefixAtSymbol
+      }
+      if (typeof patch.themeColor === "string") {
+        this.themeColor = patch.themeColor
+        this.endedTimeColor = hexToRgba(this.themeColor, ENDED_TEXT_ALPHA)
+        return
+      }
+      if (
+        this.courseGroups.length > 0 &&
+        (typeof patch.hideTeacher === "boolean" ||
+          typeof patch.prefixAtSymbol === "boolean" ||
+          typeof patch.centerHomeText === "boolean")
+      ) {
+        this.refreshCourses()
+      }
     }
   },
 

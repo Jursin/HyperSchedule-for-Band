@@ -80,6 +80,10 @@ export default {
     this.selectedColor = value
     preferences.setPreferences({themeColor: value}, (ok) => {
       if (ok) {
+        const refresh = this.$app && this.$app.$def && this.$app.$def.onPreferencesChanged
+        if (typeof refresh === "function") {
+          refresh({themeColor: value})
+        }
         router.back()
       } else {
         utils.showToast("保存失败")

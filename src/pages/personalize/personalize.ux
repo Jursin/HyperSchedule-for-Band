@@ -113,6 +113,11 @@ export default {
     preferences.setPreferences(patch, (ok) => {
       if (!ok) {
         utils.showToast("保存失败")
+        return
+      }
+      const refresh = this.$app && this.$app.$def && this.$app.$def.onPreferencesChanged
+      if (typeof refresh === "function") {
+        refresh(patch)
       }
     })
   },
